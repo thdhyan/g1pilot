@@ -10,6 +10,7 @@ general:
   frame_link: pelvis
   use_mola: true
   use_livox: true
+  joy_name: Wireless Controller
 
 nodes:
   livox_launcher_enabled: true
@@ -90,7 +91,7 @@ dex3:
   right_gripper:
     close_values: [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
     open_values: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-  left_values:
+  left_gripper:
     close_values: [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
     open_values: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
   send_commands: true

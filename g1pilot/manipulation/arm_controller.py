@@ -41,28 +41,32 @@ from g1pilot.utils.common import (
     DataBuffer,
 )
 
+from g1pilot.utils.extract_configuration import extract_configuration
+
+configuration = extract_configuration()
+
 WORKSPACE = {
-    "frame": 'pelvis',
+    "frame": configuration['workspace']['frame'],
     "left_arm": {
-        "left_bottom_front": [0.33, 0.24, 0.02],
-        "right_bottom_front": [0.33, 0.07,  0.02],
-        "left_bottom_back":   [0.16, 0.24,  0.02],
-        "right_bottom_back":  [0.16, 0.07,  0.02],
-        "right_top_back":    [0.07, 0.20,  0.20],
-        "left_top_back":     [0.07, 0.47,  0.20],
-        "right_top_front":  [0.45, 0.11,  0.20],
-        "left_top_front":   [0.41, 0.30,  0.20],
+        "left_bottom_front": configuration['workspace']['left_arm']['left_bottom_front'],
+        "right_bottom_front": configuration['workspace']['left_arm']['right_bottom_front'],
+        "left_bottom_back":   configuration['workspace']['left_arm']['left_bottom_back'],
+        "right_bottom_back":  configuration['workspace']['left_arm']['right_bottom_back'],
+        "right_top_back":    configuration['workspace']['left_arm']['right_top_back'],
+        "left_top_back":     configuration['workspace']['left_arm']['left_top_back'],
+        "right_top_front":  configuration['workspace']['left_arm']['right_top_front'],
+        "left_top_front":   configuration['workspace']['left_arm']['left_top_front'],
     },
 
     "right_arm": {
-        "left_bottom_front": [0.33, -0.24, 0.02],
-        "right_bottom_front": [0.33, -0.07,  0.02],
-        "left_bottom_back":   [0.16, -0.24,  0.02],
-        "right_bottom_back":  [0.16, -0.07,  0.02],
-        "right_top_back":    [0.07, -0.20,  0.20],
-        "left_top_back":     [0.07, -0.47,  0.20],
-        "right_top_front":  [0.45, -0.11,  0.20],
-        "left_top_front":   [0.41, -0.30,  0.20],
+        "left_bottom_front": configuration['workspace']['right_arm']['left_bottom_front'],
+        "right_bottom_front": configuration['workspace']['right_arm']['right_bottom_front'],
+        "left_bottom_back":   configuration['workspace']['right_arm']['left_bottom_back'],
+        "right_bottom_back":  configuration['workspace']['right_arm']['right_bottom_back'],
+        "right_top_back":    configuration['workspace']['right_arm']['right_top_back'],
+        "left_top_back":     configuration['workspace']['right_arm']['left_top_back'],
+        "right_top_front":  configuration['workspace']['right_arm']['right_top_front'],
+        "left_top_front":   configuration['workspace']['right_arm']['left_top_front'],
     },
 }
 

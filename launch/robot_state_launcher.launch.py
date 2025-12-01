@@ -6,6 +6,8 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.parameter_descriptions import ParameterValue
 import os
 
+from g1pilot.utils.extract_configuration import extract_configuration
+
 package_name = "g1pilot"
 urdf_file_name = "29dof.urdf"
 rviz_config_file_name = "29dof.rviz"
@@ -17,6 +19,8 @@ def generate_launch_description():
     interface = LaunchConfiguration("interface")
     sim_rate_hz = LaunchConfiguration("sim_rate_hz")
 
+    configuration = extract_configuration()
+
     urdf = os.path.join(
         get_package_share_directory(package_name), "description_files/urdf", urdf_file_name
     )
@@ -24,17 +28,17 @@ def generate_launch_description():
         robot_desc = infp.read()
 
     return LaunchDescription([
-        DeclareLaunchArgument("use_sim_time", default_value="false",
+        DeclareLaunchArgument("use_sim_time", default_value = configuration['general']['use_sim_time'],
                               description="Use simulation (Gazebo) clock if true"),
-        DeclareLaunchArgument("use_robot", default_value="true",
+        DeclareLaunchArgument("use_robot", default_value = configuration['general']['use_robot'],
                               description="Connect to real robot if true"),
-        DeclareLaunchArgument("publish_joint_states", default_value="true",
-                              description="Publish joint_states from node"),
-        DeclareLaunchArgument("interface", default_value="eth0",
+        DeclareLaunchArgument("publish_joint_states", default_value = configuration['general']['publish_joint_states'],
+                              description="Only set to no, if you are using simulation"),
+        DeclareLaunchArgument("interface", default_value = configuration['general']['interface'],
                               description="Network interface for Unitree SDK"),
-        DeclareLaunchArgument("sim_rate_hz", default_value="50.0",
+        DeclareLaunchArgument("sim_rate_hz", default_value = configuration['general']['sim_rate_hz'],
                               description="Simulation rate when use_robot=false"),
-        DeclareLaunchArgument("arm_controlled", default_value="both",
+        DeclareLaunchArgument("arm_controlled", default_value = configuration['general']['arm_controlled'],
                                 description="Which arm to control: 'left', 'right', or 'both'"),
 
         Node(
@@ -85,13 +89,6 @@ def generate_launch_description():
             executable='static_transform_publisher',
             name='pelvis_to_base_link_tf',
             arguments=['0','0','0','0','0','0','base_link','pelvis']
-        ),
-
-        Node(
-            package='tf2_ros',
-            executable='static_transform_publisher',
-            name='mrbeam_to_pelvis_tf',
-            arguments=['0.0745','0.0','0.065','0','0.05236','0','waist_roll_link','mrbeam_link']
         ),
 
         Node(

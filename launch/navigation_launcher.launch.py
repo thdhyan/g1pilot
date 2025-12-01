@@ -4,6 +4,8 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
+from g1pilot.utils.extract_configuration import extract_configuration
+
 def generate_launch_description():
     interface = LaunchConfiguration("interface")
     use_robot = LaunchConfiguration("use_robot")
@@ -14,15 +16,17 @@ def generate_launch_description():
     ik_max_dq_step = LaunchConfiguration("ik_max_dq_step")
     arm_velocity_limit = LaunchConfiguration("arm_velocity_limit")
 
+    configuration = extract_configuration()
+
     return LaunchDescription([
-        DeclareLaunchArgument("interface", default_value="eth0"),
-        DeclareLaunchArgument("use_robot", default_value="true"),
-        DeclareLaunchArgument("arm_controlled", default_value="both"),
-        DeclareLaunchArgument("enable_arm_ui", default_value="true"),
-        DeclareLaunchArgument("ik_use_waist", default_value="false"),
-        DeclareLaunchArgument("ik_alpha", default_value="0.2"),
-        DeclareLaunchArgument("ik_max_dq_step", default_value="0.05"),
-        DeclareLaunchArgument("arm_velocity_limit", default_value="2.0"),
+        DeclareLaunchArgument("interface", default_value = configuration['general']['interface']),
+        DeclareLaunchArgument("use_robot", default_value = configuration['general']['use_robot']),
+        DeclareLaunchArgument("arm_controlled", default_value = configuration['general']['arm_controlled']),
+        DeclareLaunchArgument("enable_arm_ui", default_value = configuration['general']['enable_arm_ui']),
+        DeclareLaunchArgument("ik_use_waist", default_value = configuration['general']['use_waist']),
+        DeclareLaunchArgument("ik_alpha", default_value = configuration['inverse_kinematics']['alpha']),
+        DeclareLaunchArgument("ik_max_dq_step", default_value = configuration['inverse_kinematics']['max_dq_step']),
+        DeclareLaunchArgument("arm_velocity_limit", default_value = configuration['inverse_kinematics']['velocity_limit']),
 
         Node(
             package='g1pilot',

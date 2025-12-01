@@ -149,6 +149,10 @@ ros2 launch g1pilot teleoperation_launcher.launch.py
 ros2 launch realsense2_camera rs_launch.py depth_module.depth_profile:=1280x720x30 pointcloud.enable:=true
 ```
 
+## Common Issues
+- **Network Configuration**: Ensure that your computer's network interface is correctly configured to communicate with the robot. Check IP addresses and subnet masks.
+- **send request error**: Sometimes, you might encounter a "send request error" when the loco controller is not responding. For this: Go to the [g1_loco_api.py](/unitree_sdk2_python/unitree_sdk2py/g1/loco) and modify the LOCO_SERVICE_NAME to `sport` instead of `loco` and then run the command `python3 /ros2_ws/src/g1pilot/g1pilot/tools/reset_robot.py` to reset the robot. This will allow you to control the robot in a low level way and you should only do it once.
+
 ## Entrypoints
 TODO
 

@@ -10,9 +10,13 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
 from astroviz_interfaces.msg import MotorState, MotorStateList
 
-CLOSE_RIGHT_VALUES = [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
-CLOSE_LEFT_VALUES  = [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
-OPEN_VALUES        = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+from g1pilot.utils.extract_configuration import extract_configuration
+
+configuration = extract_configuration()
+
+CLOSE_RIGHT_VALUES = configuration['dex3']['right_gripper']['close_values']
+CLOSE_LEFT_VALUES  = configuration['dex3']['left_gripper']['close_values']
+OPEN_VALUES        = configuration['dex3']['right_gripper']['open_values']
 
 class DX3Controller(Node):
     def __init__(self):
@@ -28,7 +32,7 @@ class DX3Controller(Node):
         self.left_action = None
         self.right_target = OPEN_VALUES
         self.left_target = OPEN_VALUES
-        self.total_motors = 7
+        self.total_motors = configuration['dex3']['total_dofs']
         self.send_commands = True
 
         ChannelFactoryInitialize(0, interface)

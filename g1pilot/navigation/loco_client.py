@@ -168,7 +168,7 @@ class G1LocoClient(Node):
             else:
                 self._clear_once("_warn_robot_stopped_logged")
 
-            axis_last = msg.axes[-1] if len(msg.axes) else 0.0
+            axis_last = msg.axes[-2] if len(msg.axes) else 0.0
             if self.prev_axis_last is None:
                 self.prev_axis_last = axis_last
 
@@ -224,23 +224,24 @@ class G1LocoClient(Node):
                 self._log_once("info", "Close left gripper.", "_close_left_gripper_logged")
                 self.left_gripper_pub.publish(String(data="close"))
 
-            if self._btn_rising(msg, 6):
+            if self._btn_rising(msg, 4):
                 if not self.balanced:
                     self._log_once("info", "Starting balancing procedure...", "_start_balance_r1_logged")
                     self.entering_balancing(max_height=0.5, step=0.02)
                     self._log_once("info", "Balancing procedure completed.", "_balance_completed_r1_logged")
                 else:
                     self._log_once("info", "Already balanced, no action taken.", "_already_balanced_notice_r1_logged")
-            if self._btn_falling(msg, 6):
+                    
+            if self._btn_falling(msg, 4):
                 self._clear_once("_start_balance_r1_logged")
                 self._clear_once("_balance_completed_r1_logged")
                 self._clear_once("_already_balanced_notice_r1_logged")
 
-            if msg.buttons[8] == 0 and not self.robot_stopped and self.balanced:
+            if msg.axes[5] != 1 and not self.robot_stopped and self.balanced:
                 if self.use_robot and self.robot is not None:
                     self.robot.StopMove()
 
-            if msg.buttons[8] == 1 and not self.robot_stopped and self.balanced:
+            if msg.axes[5] == 1 and not self.robot_stopped and self.balanced:
                 vx = round(msg.axes[1] * -0.5, 2)
                 vy = round(msg.axes[0] * -0.5, 2)
                 yaw = round(msg.axes[2] * -0.5, 2)

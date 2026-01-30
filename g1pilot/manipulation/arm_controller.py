@@ -701,11 +701,11 @@ class ArmController(Node):
         - Updates the IK solver's right-hand goal.
         """
 
-        if self.homing_active:
-            return
+        # if self.homing_active:
+        #     return
         
-        if not self.arms_enabled:
-            return
+        # if not self.arms_enabled:
+        #     return
 
         if self._reset_after_home:
             self._reset_after_home = False
@@ -733,8 +733,8 @@ class ArmController(Node):
 
         self._last_right_goal_raw = T_goal_in
         T_goal_use = self._apply_offsets_and_filters('right', T_goal_in)
-        if T_goal_use is not None:
-            self.ik_solver.set_goal("right", T_goal_use)
+        if T_goal_in is not None:
+            self.ik_solver.set_goal("right", T_goal_in)
 
 
     def _left_goal_callback(self, msg: PoseStamped):
@@ -754,11 +754,11 @@ class ArmController(Node):
         - Updates the IK solver's left-hand goal.
         """
 
-        if self.homing_active:
-            return
+        # if self.homing_active:
+        #     return
         
-        if not self.arms_enabled:
-            return
+        # if not self.arms_enabled:
+        #     return
 
         if self._reset_after_home:
             self._reset_after_home = False
@@ -786,8 +786,8 @@ class ArmController(Node):
 
         self._last_left_goal_raw = T_goal_in
         T_goal_use = self._apply_offsets_and_filters('left', T_goal_in)
-        if T_goal_use is not None:
-            self.ik_solver.set_goal("left", T_goal_use)
+        if T_goal_in is not None:
+            self.ik_solver.set_goal("left", T_goal_in)
 
 
     def _compute_dt(self) -> float:

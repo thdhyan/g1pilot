@@ -16,7 +16,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("interface", default_value="eth0"),
-        DeclareLaunchArgument("use_robot", default_value="true"),
+        DeclareLaunchArgument("use_robot", default_value="false"),
         DeclareLaunchArgument("arm_controlled", default_value="both"),
         DeclareLaunchArgument("enable_arm_ui", default_value="true"),
         DeclareLaunchArgument("ik_use_waist", default_value="false"),
@@ -35,16 +35,16 @@ def generate_launch_description():
             output='screen'
         ),
 
-        Node(
-            package='g1pilot',
-            executable='dx3_controller',
-            name='dx3_controller',
-            parameters=[{
-                'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
-                'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str)
-            }],
-            output='screen'
-        ),
+        # Node(
+        #     package='g1pilot',
+        #     executable='dx3_controller',
+        #     name='dx3_controller',
+        #     parameters=[{
+        #         'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
+        #         'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str)
+        #     }],
+        #     output='screen'
+        # ),
 
         Node(
             package='g1pilot',

@@ -4,69 +4,16 @@ general:
   publish_joint_states: true
   interface: eth0
   sim_rate_hz: 50.0
-  arm_controlled: both
-  enable_arm_ui: true
-  use_waist: false
   frame_link: pelvis
   use_mola: true
   use_livox: true
 
-nodes:
+launch:
   livox_launcher_enabled: true
   mola_launcher_enabled: true
   navigation_launcher_enabled: true
   robot_state_launcher_enabled: true
   teleoperation_launcher_enabled: true
-
-inverse_kinematics:
-  alpha: 0.2
-  max_dq_step: 0.05
-  velocity_limit: 5.0
-  kp_high: 300
-  kd_high: 3.0
-  kp_low: 150
-  kd_low: 4.0
-  kp_wrist: 40.0
-  kd_wrist: 1.5
-
-home:
-  right:
-    motor_1: 0.6604386568069458
-    motor_2: -0.09250623732805252
-    motor_3: 0.022230736911296844
-    motor_4: -0.839135468006134
-    motor_5: 0.10722286254167557
-    motor_6: 0.2716066539287567
-    motor_7: 0.06743379682302475
-  left:
-    motor_1: 0.9230489730834961
-    motor_2: -0.06001700088381767
-    motor_3: 0.03733086213469505
-    motor_4: -0.7793461680412292
-    motor_5: -0.06614094227552414
-    motor_6: -0.11401312798261642
-    motor_7: -0.29750025272369385
-
-workspace:
-  frame: pelvis
-  left_arm:
-    left_bottom_front: [0.33, 0.24, 0.02]
-    right_bottom_front: [0.33, 0.07,  0.02]
-    left_bottom_back:   [0.16, 0.24,  0.02]
-    right_bottom_back:  [0.16, 0.07,  0.02]
-    right_top_back:    [0.07, 0.20,  0.20]
-    left_top_back:     [0.07, 0.47,  0.20]
-    right_top_front:  [0.45, 0.11,  0.20]
-    left_top_front:   [0.41, 0.30,  0.20]
-  right_arm:
-    left_bottom_front: [0.33, -0.24, 0.02]
-    right_bottom_front: [0.33, -0.07,  0.02]
-    left_bottom_back:   [0.16, -0.24,  0.02]
-    right_bottom_back:  [0.16, -0.07,  0.02]
-    right_top_back:    [0.07, -0.20,  0.20]
-    left_top_back:     [0.07, -0.47,  0.20]
-    right_top_front:  [0.45, -0.11,  0.20]
-    left_top_front:   [0.41, -0.30,  0.20]
 
 robot:
   model: 29dof #29dof_dex3
@@ -122,7 +69,3 @@ navigation:
   manual_topic: /g1pilot/joy_manual
   autonomous_topic: /g1pilot/joy_autonomous
   autonomous_enabled_topic: /g1pilot/auto_enable
-  vx_limit: 0.6
-  vy_limit: 0.6
-  wz_limit: 0.5
-  #TODO: See Dijkstra - Nav2Goal - JoyMux

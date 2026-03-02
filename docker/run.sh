@@ -5,7 +5,8 @@ docker run \
         -it \
         --env="DISPLAY" \
         --env="QT_X11_NO_MITSHM=0" \
-        --env="ROS_DOMAIN_ID=1" \
+        --env="G1_INTERFACE=$G1_INTERFACE" \
+	--env="ROS_DOMAIN_ID=1" \
         --net host \
         --privileged \
         --device-cgroup-rule='c 81:* rmw' \
@@ -17,4 +18,4 @@ docker run \
         -v $(pwd)/cbuild:/ros2_ws/cbuild \
         -w /ros2_ws \
         --group-add video \
-        g1pilot:latest
+        g1pilot:2026.03

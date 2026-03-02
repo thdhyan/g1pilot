@@ -22,7 +22,7 @@ RUN python3 -m venv /home/.base
 RUN echo "source /home/.base/bin/activate" >> ~/.bashrc
 SHELL ["bash", "-ic"]
 
-RUN pip install --upgrade ttictoc setuptools hhcm-forest && forest init
+RUN pip install --upgrade ttictoc "setuptools<81" hhcm-forest && forest init
 RUN echo "source $PWD/setup.bash" >> ~/.bashrc
 SHELL ["bash", "-ic"]
 
@@ -212,14 +212,11 @@ RUN git clone -b 4.0-devel_ros2 https://github.com/ADVRHumanoids/OpenSoT.git && 
 #     make -j && \
 #     make install
 
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/ros2/rmw_cyclonedds -b ${ROS_DISTRO} && \
-    git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x && \
-    cd ../ && \
-    /home/.base/bin/python3 -m colcon build --packages-up-to cyclonedds
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x
 
 RUN git clone https://github.com/unitreerobotics/unitree_ros2 && \
-    mv unitree_ros2/cyclonedds_ws/src/unitree /ros2_ws/src && \
+    mv unitree_ros2/cyclonedds_ws/src/unitree /opt/unitree_ros2_ws/src && \
     rm -rf unitree_ros2
 
 # RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git && \
@@ -233,9 +230,10 @@ RUN apt-get update && apt-get install -yy ros-${ROS_DISTRO}-tf-transformations
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
     echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
 
-###### Unitree ROS2 Packages
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/unitreerobotics/unitree_ros2.git
+###### Unitree ROS2 Packages (system-wide in /opt)
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/unitreerobotics/unitree_ros2.git && \
+    rm -rf unitree_ros2/cyclonedds_ws/src/unitree
 
 
 RUN apt install -yy \
@@ -272,7 +270,8 @@ RUN /home/.base/bin/pip install -U pip setuptools wheel && \
 # Make sure interactive shells have ROS + venv ready
 RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
     echo "source /home/.base/bin/activate" >> /root/.bashrc && \
-    echo "if [ -f /home/forest_ws/install/local_setup.bash ]; then source /home/forest_ws/install/local_setup.bash; fi" >> /root/.bashrc && \
+    echo "if [ -f /home/forest_ws/setup.bash ]; then source /home/forest_ws/setup.bash; fi" >> /root/.bashrc && \
+    echo "if [ -f /opt/unitree_ros2_ws/install/setup.bash ]; then source /opt/unitree_ros2_ws/install/setup.bash; fi" >> /root/.bashrc && \
     echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> /root/.bashrc
 
 # -----------------------------
@@ -284,7 +283,8 @@ RUN cat >> /root/.bashrc <<'EOF'
 rosenv() {
   source /opt/ros/jazzy/setup.bash
   source /home/.base/bin/activate
-  [ -f /home/forest_ws/install/local_setup.bash ] && source /home/forest_ws/install/local_setup.bash
+  [ -f /home/forest_ws/setup.bash ] && source /home/forest_ws/setup.bash
+  [ -f /opt/unitree_ros2_ws/install/setup.bash ] && source /opt/unitree_ros2_ws/install/setup.bash
   [ -f /ros2_ws/install/setup.bash ] && source /ros2_ws/install/setup.bash
 }
 
@@ -325,14 +325,8 @@ RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
 
 RUN echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc
 
-WORKDIR /
-RUN git clone https://github.com/lnotspotl/unitree_sdk2_python.git \
- && cd unitree_sdk2_python \
- && git checkout 7c661d27f4ae064ffd0dd633fd9d5b518ef0b508 \
- && /home/.base/bin/pip install -e .
-
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git /ros2_ws/src/livox_ros_driver2
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git /opt/unitree_ros2_ws/src/livox_ros_driver2
 
 WORKDIR /
 RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
@@ -357,16 +351,22 @@ RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
     make install
 
 
-WORKDIR /ros2_ws/src/livox_ros_driver2
+WORKDIR /opt/unitree_ros2_ws/src/livox_ros_driver2
 RUN rm -f package.xml && \
     cp package_ROS2.xml package.xml && \
     cp -rf launch_ROS2 launch
 
-RUN rm -rf /ros2_ws/src/unitree_ros2/cyclonedds_ws/src/unitree
-
-WORKDIR /ros2_ws
+WORKDIR /opt/unitree_ros2_ws
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    . /home/forest_ws/setup.bash && \
     /home/.base/bin/python3 -m colcon build --cmake-args -DROS_EDITION=ROS2 -DHUMBLE_ROS=humble
+
+# unitree_sdk2_python (needs cyclonedds built above)
+WORKDIR /
+RUN git clone https://github.com/lnotspotl/unitree_sdk2_python.git \
+ && cd unitree_sdk2_python \
+ && git checkout 7c661d27f4ae064ffd0dd633fd9d5b518ef0b508 \
+ && CYCLONEDDS_HOME=/opt/unitree_ros2_ws/install/cyclonedds /home/.base/bin/pip install -e .
 
 RUN pip install pyqt6 pin meshcat evdev
 RUN apt-get update && apt-get install -y \
@@ -386,7 +386,7 @@ RUN apt install ros-${ROS_DISTRO}-rosidl-default-generators -y
 
 RUN apt update
 RUN apt install ros-${ROS_DISTRO}-rmw-cyclonedds-cpp -y
-WORKDIR /ros2_ws/src
+WORKDIR /opt/unitree_ros2_ws/src
 RUN git clone https://github.com/CDonosoK/astroviz_interfaces.git
 RUN apt-get update && apt-get upgrade -y
 RUN apt install -y python3-gi gstreamer1.0-tools \
@@ -422,5 +422,21 @@ RUN echo "source /home/.base/bin/activate" >> /root/.bashrc
 RUN rm -f /home/.base/bin/register-python-argcomplete || true
 
 RUN echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc
+
+# CycloneDDS network setup (replaces setup_uri.sh)
+RUN cat >> /root/.bashrc <<'DDSEOF'
+
+# CycloneDDS configuration via G1_INTERFACE env var
+if [ -z "$G1_INTERFACE" ]; then
+  echo "[WARNING] G1_INTERFACE is not set. CycloneDDS will not be configured."
+  echo "          Set it to your network interface (e.g. eth0) or 'lo' for localhost."
+else
+  export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"${G1_INTERFACE}\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+  if [ "$G1_INTERFACE" = "lo" ]; then
+    ip link set lo multicast on 2>/dev/null
+  fi
+fi
+DDSEOF
 
 CMD ["bash"]

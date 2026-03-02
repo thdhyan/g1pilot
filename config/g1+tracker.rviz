@@ -12,6 +12,7 @@ Panels:
         - /Utils1/LivoxCloud1
         - /Utils1/MolaCloud1
         - /InteractiveMarkers1
+        - /center_object_filtered1
       Splitter Ratio: 0.5
     Tree Height: 581
   - Class: rviz_common/Selection
@@ -962,21 +963,6 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
-    - Alpha: 1
-      Class: rviz_default_plugins/PointStamped
-      Color: 204; 41; 204
-      Enabled: true
-      History Length: 1
-      Name: center_object
-      Radius: 0.05000000074505806
-      Topic:
-        Depth: 5
-        Durability Policy: Volatile
-        Filter size: 10
-        History Policy: Keep Last
-        Reliability Policy: Reliable
-        Value: /bleu_tracker/points_world/mask_0/center
-      Value: true
     - Class: rviz_default_plugins/Image
       Enabled: true
       Max Value: 1
@@ -1031,6 +1017,36 @@ Visualization Manager:
         Reliability Policy: Reliable
         Value: /apriltag_pose/pose_tag_105
       Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointStamped
+      Color: 204; 41; 204
+      Enabled: true
+      History Length: 1
+      Name: center_object
+      Radius: 0.05000000074505806
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bleu_tracker/points_world/mask_0/center
+      Value: true
+    - Alpha: 1
+      Class: rviz_default_plugins/PointStamped
+      Color: 204; 41; 204
+      Enabled: true
+      History Length: 1
+      Name: center_object_filtered
+      Radius: 0.05000000074505806
+      Topic:
+        Depth: 5
+        Durability Policy: Volatile
+        Filter size: 10
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Value: /bleu_tracker/points_world/mask_0/center_filtered
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 9; 12; 40
@@ -1077,7 +1093,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz_default_plugins/Orbit
-      Distance: 2.209841728210449
+      Distance: 3.477228879928589
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
         Stereo Focal Distance: 1
@@ -1092,10 +1108,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.15979637205600739
+      Pitch: 0.1297963410615921
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 1.7936304807662964
+      Yaw: 2.4486308097839355
     Saved: ~
 Window Geometry:
   Displays:

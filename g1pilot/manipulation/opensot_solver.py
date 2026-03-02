@@ -89,7 +89,7 @@ class G1CollisionAvoidanceNode(Node):
         self.get_logger().info("Starting G1 Collision Avoidance Node")
 
         self.declare_parameter("use_robot", True)
-        self.declare_parameter("interface", "eno2")
+        self.declare_parameter("interface", "")
         self.interface = str(self.get_parameter("interface").value)
         self.use_robot = bool(self.get_parameter("use_robot").value)
 
@@ -111,7 +111,7 @@ class G1CollisionAvoidanceNode(Node):
 
 
         self.client = self.create_client(GetParameters, "/robot_state_publisher/get_parameters")
-        self.joint_state_publisher = self.create_publisher(JointState, "/joint_states", 10)
+        self.joint_state_publisher = self.create_publisher(JointState, "/joint_states_opensot", 10)
         self.base_height_publisher = self.create_publisher(Float64, "/base_height", 10)
         self.base_link_broadcaster = TransformBroadcaster(self)
 

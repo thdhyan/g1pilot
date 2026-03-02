@@ -1,10 +1,15 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
+import os
+import sys
 
 def generate_launch_description():
+    if not os.environ.get("G1_INTERFACE"):
+        sys.exit("ERROR: G1_INTERFACE environment variable is not set.\n"
+                 "Set it to your network interface, e.g.: export G1_INTERFACE=eno2")
     interface = LaunchConfiguration("interface")
     use_robot = LaunchConfiguration("use_robot")
     arm_controlled = LaunchConfiguration("arm_controlled")
@@ -15,7 +20,7 @@ def generate_launch_description():
     arm_velocity_limit = LaunchConfiguration("arm_velocity_limit")
 
     return LaunchDescription([
-        DeclareLaunchArgument("interface", default_value="eno2"),
+        DeclareLaunchArgument("interface", default_value=EnvironmentVariable("G1_INTERFACE")),
         DeclareLaunchArgument("use_robot", default_value="true"),
         DeclareLaunchArgument("arm_controlled", default_value="both"),
         DeclareLaunchArgument("enable_arm_ui", default_value="true"),

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import time
 from typing import Optional
 
@@ -28,11 +29,15 @@ def _fsm_mode(client: LocoClient) -> Optional[int]:
     return _rpc_get_int(client, ROBOT_API_ID_LOCO_GET_FSM_MODE)
 
 def hanger_boot_sequence(
-    iface: str = "eno2",
+    iface: str = os.environ.get("G1_INTERFACE", ""),
     step: float = 0.02,
     max_height: float = 0.5,
     logger: Optional[logging.Logger] = None,
 ) -> LocoClient:
+    if not iface:
+        raise RuntimeError("G1_INTERFACE environment variable is not set.\n"
+                           "Set it to your network interface, e.g.: export G1_INTERFACE=eno2")
+
     if logger is None:
         logging.basicConfig(level=logging.INFO, format="%(message)s")
         logger = logging.getLogger("hanger_boot")
@@ -91,5 +96,5 @@ def hanger_boot_sequence(
 
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO, format="%(message)s")
-    bot = hanger_boot_sequence(iface="eno2")
+    bot = hanger_boot_sequence()
     print(f"Robot is now in FSM {bot.GetFsmId()} (mode {_fsm_mode(bot)})")

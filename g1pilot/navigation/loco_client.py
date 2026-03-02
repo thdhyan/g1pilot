@@ -39,7 +39,7 @@ class G1LocoClient(Node):
         self.declare_parameter('use_robot', True)
         self.use_robot = bool(self.get_parameter('use_robot').value)
 
-        self.declare_parameter('interface', 'eno2')
+        self.declare_parameter('interface', '')
         interface = self.get_parameter('interface').get_parameter_value().string_value
         self.declare_parameter('arm_controlled', 'both')
         self.arm_controlled = self.get_parameter('arm_controlled').get_parameter_value().string_value

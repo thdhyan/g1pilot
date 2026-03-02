@@ -11,15 +11,17 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
 from astroviz_interfaces.msg import MotorState, MotorStateList
 
-CLOSE_RIGHT_VALUES = [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
-CLOSE_LEFT_VALUES  = [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
-# CLOSE_LEFT_VALUES  = [0.04,  0.6,  1.5, -1.35, -1.58, -1.36, -1.32] #+10 degrees on each middle fingers joints
+#CLOSE_RIGHT_VALUES = [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
+CLOSE_RIGHT_VALUES = [0.00,  0.0,  0.0, 0.0, 1.6, 0.0, 1.6]
+# CLOSE_LEFT_VALUES  = [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
+# CLOSE_LEFT_VALUES  = [0.04,  0.4,  1.5, -1.10, -1.58, -1.13, -1.32] motor gripper
+CLOSE_LEFT_VALUES  = [0.04,  0.6,  1.4, -1.2, -1.6, -1.2, -1.4] #+10 degrees on each middle fingers joints
 OPEN_VALUES        = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 class DX3Controller(Node):
     def __init__(self):
         super().__init__('dx3_hand_controller')
-        self.declare_parameter("interface", "eno2")
+        self.declare_parameter("interface", "")
         self.declare_parameter("arm_controlled", "both")
         interface = self.get_parameter("interface").get_parameter_value().string_value
         arm_controlled = self.get_parameter("arm_controlled").get_parameter_value().string_value

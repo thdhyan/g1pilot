@@ -86,7 +86,7 @@ class RobotState(Node):
         super().__init__('robot_state')
 
         self.declare_parameter('use_robot', True)
-        self.declare_parameter('interface', 'eno2')
+        self.declare_parameter('interface', '')
         self.declare_parameter('publish_joint_states', True)
 
         self.use_robot = bool(self.get_parameter('use_robot').value)

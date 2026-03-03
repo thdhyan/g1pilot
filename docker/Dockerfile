@@ -394,6 +394,12 @@ RUN apt install -y python3-gi gstreamer1.0-tools \
 
 RUN pip install --upgrade pyrealsense2 numpy opencv-python
 
+# Build astroviz_interfaces (cloned above) so its message types are generated
+WORKDIR /opt/unitree_ros2_ws
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    . /home/forest_ws/setup.bash && \
+    /home/.base/bin/python3 -m colcon build --packages-select astroviz_interfaces
+
 ##### MOLA packages
 RUN apt install -y \
  ros-${ROS_DISTRO}-mola \

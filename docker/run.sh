@@ -16,6 +16,9 @@ docker run \
         -v `pwd`/../config/livox_mid.json:/ros2_ws/src/livox_ros_driver2/config/MID360_config.json  \
         -v $(pwd)/setup_uri.sh:/ros2_ws/setup_uri.sh \
         -v $(pwd)/cbuild:/ros2_ws/cbuild \
+        -v $(pwd)/entrypoint.sh:/entrypoint.sh:ro \
         -w /ros2_ws \
         --group-add video \
-        g1pilot:2026.03
+        --entrypoint /bin/bash \
+        g1pilot:2026.03 \
+        /entrypoint.sh

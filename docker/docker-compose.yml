@@ -4,7 +4,7 @@
 
 services:
   g1pilot:
-    image: g1pilot:2026.03
+    image: g1pilot-from-bleu-base:2026.03
     container_name: g1pilot
     stdin_open: true
     tty: true

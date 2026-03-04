@@ -159,6 +159,7 @@ class RobotState(Node):
 
         self.motor_state_pub.publish(motor_list_msg)
 
+        # print("PUBLISH joint states:", self.publish_joint_states)
         if self.publish_joint_states:
             self.joint_state_msg.header.stamp = now
             self.joint_state_msg.position = positions

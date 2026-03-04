@@ -1,13 +1,8 @@
-FROM osrf/ros:jazzy-desktop
+FROM registry.gitlab.com/bleurobotics/code/bleu_integration/bleu-base:jazzy-cuda-26-02
 
 SHELL ["/bin/bash", "-c"]
 
-ENV DEBIAN_FRONTEND="noninteractive"
-ENV TZ="Europe/Paris"
-
-WORKDIR /deps
-
-RUN apt-get update && apt-get upgrade -y && apt-get clean  && apt-get install -y terminator gedit locate cmake-curses-gui python3-pip python3-venv liburdfdom-dev ros-jazzy-moveit-core
+ENV PYTHONUNBUFFERED=1
 
 WORKDIR /home
 RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
@@ -15,14 +10,14 @@ RUN echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
 # create forest ws and use it to clone and install CONCERT's simulation package
 WORKDIR /home/forest_ws
 ENV HHCM_FOREST_CLONE_DEFAULT_PROTO=https
-ENV PYTHONUNBUFFERED=1
 
 # create python virtual env
+RUN apt-get update && apt-get install -y python3-venv && rm -rf /var/lib/apt/lists/*
 RUN python3 -m venv /home/.base
 RUN echo "source /home/.base/bin/activate" >> ~/.bashrc
 SHELL ["bash", "-ic"]
 
-RUN pip install --upgrade ttictoc setuptools hhcm-forest && forest init
+RUN pip install --upgrade ttictoc "setuptools<81" hhcm-forest && forest init
 RUN echo "source $PWD/setup.bash" >> ~/.bashrc
 SHELL ["bash", "-ic"]
 
@@ -65,6 +60,7 @@ RUN git clone -b devel https://github.com/stack-of-tasks/pinocchio.git && \
 
 # xbot2_interface
 WORKDIR /home/forest_ws/src
+RUN apt-get update && apt-get install -y ros-jazzy-srdfdom ros-jazzy-geometric-shapes && rm -rf /var/lib/apt/lists/*
 RUN git clone -b devel https://github.com/ADVRHumanoids/xbot2_interface.git && \
     mkdir -p /home/forest_ws/build/xbot2_interface && \
     cd /home/forest_ws/build/xbot2_interface && \
@@ -102,7 +98,7 @@ RUN git clone https://github.com/Simple-Robotics/proxsuite.git && \
     make -j8 && \
     make install
 
-RUN apt-get update && apt-get upgrade -y && apt-get clean  && apt-get install -y libxcb-cursor0 gdb
+RUN apt-get update && apt-get upgrade -y && apt-get clean && apt-get install -y libxcb-cursor0 gdb ros-jazzy-xacro ros-jazzy-joint-state-publisher-gui && rm -rf /var/lib/apt/lists/*
 
 # FCL v0.6.0 THIS IS REQUIRED TO RUN TESTS IN OPENSOT! THIS MAY CONFLICT WITH fcl v0.7 installed by default!
 WORKDIR /home/forest_ws/src
@@ -142,8 +138,6 @@ RUN git clone https://github.com/qpSWIFT/qpSWIFT.git && \
     make -j8 && \
     make install
 
-RUN apt-get update && apt-get upgrade -y && apt-get clean  && apt-get install -y ros-jazzy-xacro ros-jazzy-joint-state-publisher-gui
-
 WORKDIR /home
 RUN echo "export PYTHONPATH=${PYTHONPATH}:/root/.local/lib/python3.12/site-packages:/usr/lib/python3/dist-packages/" >> ~/.bashrc
 
@@ -152,38 +146,20 @@ RUN git clone https://github.com/frankarobotics/franka_description.git
 RUN git clone -b ros2 https://github.com/EnricoMingo/LittleDog.git
 WORKDIR /home/ros2_ws
 
-### HURo Stuff
-ENV ROS_DISTRO=jazzy
-ENV DISPLAY=:0
-ENV LIBGL_ALWAYS_INDIRECT=0
-
-WORKDIR /deps
-
 RUN apt-get update && apt-get install -yy \
-    python3-pip \
-    python3-colcon-common-extensions \
+    terminator \
+    nano \
+    neovim \
+    gedit \
     ros-${ROS_DISTRO}-xacro \
     ros-${ROS_DISTRO}-rviz2 \
     ros-${ROS_DISTRO}-joy \
     ros-${ROS_DISTRO}-pcl-conversions \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
     ros-${ROS_DISTRO}-rosidl-generator-dds-idl \
     libpcl-dev \
-    terminator \
-    nano \
-    neovim \
-    git \
-    gedit \
-    libxinerama-dev \
-    libxcursor-dev \
-    libxi-dev \
-    libwayland-dev \
-    libxkbcommon-dev \
-    iproute2 \
-    libhidapi-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN pip install pyspacemouse torch pyyaml onnxruntime
+RUN pip install --break-system-packages onnxruntime
 
 # MuJoCo
 RUN git clone https://github.com/deepmind/mujoco.git && \
@@ -195,6 +171,7 @@ RUN git clone https://github.com/deepmind/mujoco.git && \
     cmake --install .
 
 # OpenSoT
+RUN apt-get update && apt-get install -y ros-jazzy-moveit-msgs ros-jazzy-moveit-core && rm -rf /var/lib/apt/lists/*
 RUN git clone -b 4.0-devel_ros2 https://github.com/ADVRHumanoids/OpenSoT.git && \
     cd OpenSoT && \
     mkdir -p build && \
@@ -212,40 +189,24 @@ RUN git clone -b 4.0-devel_ros2 https://github.com/ADVRHumanoids/OpenSoT.git && 
 #     make -j && \
 #     make install
 
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/ros2/rmw_cyclonedds -b ${ROS_DISTRO} && \
-    git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x && \
-    cd ../ && \
-    /home/.base/bin/python3 -m colcon build --packages-up-to cyclonedds
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/eclipse-cyclonedds/cyclonedds -b releases/0.10.x
 
 RUN git clone https://github.com/unitreerobotics/unitree_ros2 && \
-    mv unitree_ros2/cyclonedds_ws/src/unitree /ros2_ws/src && \
+    mv unitree_ros2/cyclonedds_ws/src/unitree /opt/unitree_ros2_ws/src && \
     rm -rf unitree_ros2
 
-# RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git && \
-#     cd livox_ros_driver2 && \
-#     rm -f package.xml && \
-#     cp package_ROS2.xml package.xml && \
-#     cp -rf launch_ROS2 launch
+RUN apt-get update && apt-get install -yy ros-${ROS_DISTRO}-tf-transformations && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -yy ros-${ROS_DISTRO}-tf-transformations
+###### Unitree ROS2 Packages (system-wide in /opt)
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/unitreerobotics/unitree_ros2.git && \
+    rm -rf unitree_ros2/cyclonedds_ws/src/unitree
 
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
-
-###### Unitree ROS2 Packages
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/unitreerobotics/unitree_ros2.git
-
-
-RUN apt install -yy \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-    ros-${ROS_DISTRO}-rosidl-generator-dds-idl
-
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> /root/.bashrc
-
-RUN echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc
+RUN apt-get update && apt-get install -yy \
+    ros-${ROS_DISTRO}-rosidl-generator-dds-idl \
+    ros-${ROS_DISTRO}-rosidl-default-generators && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN echo "export ROS_DOMAIN_ID=1" >> /root/.bashrc
 
@@ -256,35 +217,30 @@ RUN /home/.base/bin/pip install -U pip setuptools wheel && \
     /home/.base/bin/pip install git+https://github.com/bglopez/python-easyhid.git && \
     /home/.base/bin/pip install hidapi scipy matplotlib
 
-# -----------------------------
 # Fix rosidl Python deps (empy / lark) + make shell env robust
-# -----------------------------
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-empy \
     python3-lark \
     python3-catkin-pkg \
  && rm -rf /var/lib/apt/lists/*
 
-RUN /home/.base/bin/pip install -U pip setuptools wheel && \
-    /home/.base/bin/pip install -U colcon-common-extensions && \
-    /home/.base/bin/pip install hidapi pyspacemouse
+RUN /home/.base/bin/pip install -U colcon-common-extensions
 
 # Make sure interactive shells have ROS + venv ready
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "source /home/.base/bin/activate" >> /root/.bashrc && \
-    echo "if [ -f /home/forest_ws/install/local_setup.bash ]; then source /home/forest_ws/install/local_setup.bash; fi" >> /root/.bashrc && \
+RUN echo "source /home/.base/bin/activate" >> /root/.bashrc && \
+    echo "if [ -f /home/forest_ws/setup.bash ]; then source /home/forest_ws/setup.bash; fi" >> /root/.bashrc && \
+    echo "if [ -f /opt/unitree_ros2_ws/install/setup.bash ]; then source /opt/unitree_ros2_ws/install/setup.bash; fi" >> /root/.bashrc && \
     echo "if [ -f /ros2_ws/install/setup.bash ]; then source /ros2_ws/install/setup.bash; fi" >> /root/.bashrc
 
-# -----------------------------
 # Shell helpers: rosenv + colcon via venv
-# -----------------------------
 RUN cat >> /root/.bashrc <<'EOF'
 
 # Load ROS + venv + overlays
 rosenv() {
   source /opt/ros/jazzy/setup.bash
   source /home/.base/bin/activate
-  [ -f /home/forest_ws/install/local_setup.bash ] && source /home/forest_ws/install/local_setup.bash
+  [ -f /home/forest_ws/setup.bash ] && source /home/forest_ws/setup.bash
+  [ -f /opt/unitree_ros2_ws/install/setup.bash ] && source /opt/unitree_ros2_ws/install/setup.bash
   [ -f /ros2_ws/install/setup.bash ] && source /ros2_ws/install/setup.bash
 }
 
@@ -310,29 +266,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libhidapi-dev \
  && rm -rf /var/lib/apt/lists/*
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ros-${ROS_DISTRO}-rmw-cyclonedds-cpp \
-    ros-${ROS_DISTRO}-cyclonedds \
-    iproute2 \
- && rm -rf /var/lib/apt/lists/*
-
 RUN echo "rosenv 2>/dev/null || true" >> /root/.bashrc
-
-RUN apt-get update && apt-get install -yy ros-${ROS_DISTRO}-tf-transformations
-
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
 
 RUN echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc
 
-WORKDIR /
-RUN git clone https://github.com/lnotspotl/unitree_sdk2_python.git \
- && cd unitree_sdk2_python \
- && git checkout 7c661d27f4ae064ffd0dd633fd9d5b518ef0b508 \
- && /home/.base/bin/pip install -e .
-
-WORKDIR /ros2_ws/src
-RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git /ros2_ws/src/livox_ros_driver2
+WORKDIR /opt/unitree_ros2_ws/src
+RUN git clone https://github.com/Livox-SDK/livox_ros_driver2.git /opt/unitree_ros2_ws/src/livox_ros_driver2
 
 WORKDIR /
 RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
@@ -356,20 +295,24 @@ RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
     make -j"$(nproc)" && \
     make install
 
-
-WORKDIR /ros2_ws/src/livox_ros_driver2
+WORKDIR /opt/unitree_ros2_ws/src/livox_ros_driver2
 RUN rm -f package.xml && \
     cp package_ROS2.xml package.xml && \
     cp -rf launch_ROS2 launch
 
-RUN rm -rf /ros2_ws/src/unitree_ros2/cyclonedds_ws/src/unitree
-
-WORKDIR /ros2_ws
+WORKDIR /opt/unitree_ros2_ws
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    . /home/forest_ws/setup.bash && \
     /home/.base/bin/python3 -m colcon build --cmake-args -DROS_EDITION=ROS2 -DHUMBLE_ROS=humble
 
-RUN pip install pyqt6 pin meshcat evdev
-RUN apt-get update && apt-get install -y \
+# unitree_sdk2_python (needs cyclonedds built above)
+WORKDIR /
+RUN git clone https://github.com/lnotspotl/unitree_sdk2_python.git \
+ && cd unitree_sdk2_python \
+ && git checkout 7c661d27f4ae064ffd0dd633fd9d5b518ef0b508 \
+ && CYCLONEDDS_HOME=/opt/unitree_ros2_ws/install/cyclonedds /home/.base/bin/pip install -e .
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libxkbcommon-x11-0 \
     libxcb-cursor0 \
     libxcb-icccm4 \
@@ -378,32 +321,33 @@ RUN apt-get update && apt-get install -y \
     libxcb-render-util0 \
     libxcb-xinerama0 \
     libxcb-xinput0 \
-    libxcb-shape0
+    libxcb-shape0 \
+    python3-gi \
+    gstreamer1.0-tools \
+    gstreamer1.0-plugins-* \
+    gstreamer1.0-libav && \
+    rm -rf /var/lib/apt/lists/*
 
+RUN /home/.base/bin/pip install --break-system-packages pyqt6 pin meshcat evdev pyrealsense2 opencv-python
 
-RUN apt update
-RUN apt install ros-${ROS_DISTRO}-rosidl-default-generators -y
-
-RUN apt update
-RUN apt install ros-${ROS_DISTRO}-rmw-cyclonedds-cpp -y
-WORKDIR /ros2_ws/src
+WORKDIR /opt/unitree_ros2_ws/src
 RUN git clone https://github.com/CDonosoK/astroviz_interfaces.git
-RUN apt-get update && apt-get upgrade -y
-RUN apt install -y python3-gi gstreamer1.0-tools \
-  gstreamer1.0-plugins-* gstreamer1.0-libav
 
-RUN pip install --upgrade pyrealsense2 numpy opencv-python
+# Build astroviz_interfaces (cloned above) so its message types are generated
+WORKDIR /opt/unitree_ros2_ws
+RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \
+    . /home/forest_ws/setup.bash && \
+    /home/.base/bin/python3 -m colcon build --packages-select astroviz_interfaces
 
-##### MOLA packages
-RUN apt install -y \
+# MOLA packages
+RUN apt-get update && apt-get install -y \
  ros-${ROS_DISTRO}-mola \
  ros-${ROS_DISTRO}-mola-state-estimation \
- ros-${ROS_DISTRO}-mola-lidar-odometry
+ ros-${ROS_DISTRO}-mola-lidar-odometry && \
+ rm -rf /var/lib/apt/lists/*
 
-RUN pip install placo
+RUN /home/.base/bin/pip install placo
 
-RUN python3 -m pip install --no-cache-dir -U pip setuptools wheel && \
-    python3 -m pip install --no-cache-dir cyclonedds
 RUN /home/.base/bin/pip install --no-cache-dir cyclonedds
 
 ENV CRC_SRC=/unitree_sdk2_python/unitree_sdk2py/utils/lib/crc_amd64.so
@@ -413,14 +357,23 @@ RUN set -eux; \
     mkdir -p "$CRC_DST"; \
     cp "$CRC_SRC" "$CRC_DST/"; \
     chmod +x "$CRC_DST/crc_amd64.so"
-    
-RUN echo "source /opt/ros/${ROS_DISTRO}/setup.bash" >> /root/.bashrc && \
-    echo "source /ros2_ws/install/setup.bash" >> /root/.bashrc
-
-RUN echo "source /home/.base/bin/activate" >> /root/.bashrc
 
 RUN rm -f /home/.base/bin/register-python-argcomplete || true
 
-RUN echo "export LD_LIBRARY_PATH=/usr/local/lib:\$LD_LIBRARY_PATH" >> /root/.bashrc
+# CycloneDDS network setup (replaces setup_uri.sh)
+RUN cat >> /root/.bashrc <<'DDSEOF'
+
+# CycloneDDS configuration via G1_INTERFACE env var
+if [ -z "$G1_INTERFACE" ]; then
+  echo "[WARNING] G1_INTERFACE is not set. CycloneDDS will not be configured."
+  echo "          Set it to your network interface (e.g. eth0) or 'lo' for localhost."
+else
+  export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+  export CYCLONEDDS_URI="<CycloneDDS><Domain><General><Interfaces><NetworkInterface name=\"${G1_INTERFACE}\" priority=\"default\" multicast=\"default\" /></Interfaces></General></Domain></CycloneDDS>"
+  if [ "$G1_INTERFACE" = "lo" ]; then
+    ip link set lo multicast on 2>/dev/null
+  fi
+fi
+DDSEOF
 
 CMD ["bash"]

@@ -43,9 +43,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.002 0 -0.09" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/pelvis_contour_link.STL"/>
+        <box size="0.12 0.14 0.12"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/pelvis_contour_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -71,9 +72,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0.025 -0.015" rpy="1.5708 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_hip_pitch_link.STL"/>
+        <cylinder radius="0.04" length="0.08"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_hip_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -100,9 +102,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.015 0 -0.06" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_hip_roll_link.STL"/>
+        <cylinder radius="0.07" length="0.12"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_hip_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -129,9 +132,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.0 0 -0.09" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_hip_yaw_link.STL"/>
+        <cylinder radius="0.055" length="0.18"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_hip_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -158,9 +162,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_knee_link.STL"/>
+        <cylinder radius="0.06" length="0.30"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_knee_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -312,9 +317,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 -0.025 -0.015" rpy="1.5708 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_hip_pitch_link.STL"/>
+        <cylinder radius="0.04" length="0.08"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_hip_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -341,9 +347,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.015 0 -0.06" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_hip_roll_link.STL"/>
+        <cylinder radius="0.07" length="0.12"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_hip_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -370,9 +377,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="-0.0 0 -0.09" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_hip_yaw_link.STL"/>
+        <cylinder radius="0.055" length="0.18"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_hip_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -399,10 +407,14 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0 0 -0.15" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_knee_link.STL"/>
+        <cylinder radius="0.06" length="0.30"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_knee_link.STL"/> -->
       </geometry>
+       <material name="white">
+        <color rgba="1.0 0.0 0.0 1"/>
+      </material>
     </collision>
   </link>
   <joint name="right_knee_joint" type="revolute">
@@ -553,6 +565,13 @@
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
+    <collision>
+      <origin xyz="0 0 0.027" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.06" length="0.15"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/waist_yaw_link_rev_1_0.STL"/> -->
+      </geometry>
+    </collision>
   </link>
   <joint name="waist_yaw_joint" type="revolute">
     <origin xyz="0 0 0" rpy="0 0 0"/>
@@ -576,6 +595,13 @@
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.017" length="0.024"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/waist_roll_link_rev_1_0.STL"/> -->
+      </geometry>
+    </collision>
   </link>
   <joint name="waist_roll_joint" type="revolute">
     <origin xyz="-0.0039635 0 0.044" rpy="0 0 0"/>
@@ -600,10 +626,11 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.0085 0 0.1514" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/torso_link_rev_1_0.STL"/>
+        <box size="0.13 0.20 0.30"/>
       </geometry>
+      <!-- <mesh filename="package://g1pilot/description_files/meshes/torso_link_rev_1_0.STL"/> -->
     </collision>
   </link>
   <joint name="waist_pitch_joint" type="revolute">
@@ -731,6 +758,7 @@
       <origin xyz="0 0.04 -0.01" rpy="0 1.5707963267948966 0"/>
       <geometry>
         <cylinder radius="0.03" length="0.05"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_shoulder_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -760,6 +788,7 @@
       <origin xyz="-0.004 0.006 -0.053" rpy="0 0 0"/>
       <geometry>
         <cylinder radius="0.03" length="0.03"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_shoulder_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -786,9 +815,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.008 -0.004 -0.041" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_shoulder_yaw_link.STL"/>
+        <cylinder radius="0.04" length="0.145"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_shoulder_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -815,9 +845,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.035 0.002 -0.008" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_elbow_link.STL"/>
+        <cylinder radius="0.035" length="0.13"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_elbow_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -851,9 +882,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.028 0 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_wrist_roll_link.STL"/>
+        <cylinder radius="0.03" length="0.056"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_wrist_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -880,9 +912,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.023 0 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_wrist_pitch_link.STL"/>
+        <cylinder radius="0.03" length="0.10"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_wrist_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -909,9 +942,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.012 0.003 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/left_wrist_yaw_link.STL"/>
+        <cylinder radius="0.03" length="0.06"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_wrist_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -935,6 +969,14 @@
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
+    <collision>
+      <origin xyz="0.07 -0.015 0.01" rpy="0 0 0"/>
+      <geometry>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/left_rubber_hand.STL"/> -->
+        <box size="0.15 0.08 0.12"/>
+      </geometry>
+    </collision>
+
   </link>
 
     <!-- Left Hand Point Contact Frames -->
@@ -964,6 +1006,7 @@
       <origin xyz="0 -0.04 -0.01" rpy="0 1.5707963267948966 0"/>
       <geometry>
         <cylinder radius="0.03" length="0.05"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_shoulder_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -993,6 +1036,7 @@
       <origin xyz="-0.004 -0.006 -0.053" rpy="0 0 0"/>
       <geometry>
         <cylinder radius="0.03" length="0.03"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_shoulder_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1019,9 +1063,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.008 0.004 -0.041" rpy="0 0 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_shoulder_yaw_link.STL"/>
+        <cylinder radius="0.04" length="0.145"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_shoulder_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1048,9 +1093,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.035 -0.002 -0.008" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_elbow_link.STL"/>
+        <cylinder radius="0.035" length="0.13"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_elbow_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1084,9 +1130,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.028 0 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_wrist_roll_link.STL"/>
+        <cylinder radius="0.03" length="0.056"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_wrist_roll_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1113,9 +1160,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.023 0 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_wrist_pitch_link.STL"/>
+        <cylinder radius="0.03" length="0.10"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_wrist_pitch_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1142,9 +1190,10 @@
       </material>
     </visual>
     <collision>
-      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <origin xyz="0.012 -0.003 0" rpy="0 1.5708 0"/>
       <geometry>
-        <mesh filename="package://g1pilot/description_files/meshes/right_wrist_yaw_link.STL"/>
+        <cylinder radius="0.03" length="0.06"/>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_wrist_yaw_link.STL"/> -->
       </geometry>
     </collision>
   </link>
@@ -1168,6 +1217,13 @@
         <color rgba="0.7 0.7 0.7 1"/>
       </material>
     </visual>
+    <collision>
+      <origin xyz="0.07 0.015 0.01" rpy="0 0 0"/>
+      <geometry>
+        <!-- <mesh filename="package://g1pilot/description_files/meshes/right_rubber_hand.STL"/> -->
+        <box size="0.15 0.08 0.12"/>
+      </geometry>
+    </collision>
   </link>
 
     <!-- Right Hand Point Contact Frames -->

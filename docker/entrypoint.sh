@@ -10,6 +10,6 @@ cd /ros2_ws &&
 ./cbuild &&
 source setup_uri.sh ${G1_INTERFACE} &&
 source install/setup.bash &&
-ros2 launch g1pilot bringup_launcher.launch.py use_torso:=false 
+ros2 launch g1pilot bringup_launcher.launch.py enable_collision_avoidance:=${ENABLE_COLLISION_AVOIDANCE:-false}
 '
 #unset RMW_IMPLEMENTATION &&

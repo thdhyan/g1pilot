@@ -35,7 +35,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(robot_state_launcher),
             launch_arguments={
                 'interface': interface,
-                'publish_joint_states': 'true',
+                'publish_joint_states': 'false',
             }.items(),
         ),
         IncludeLaunchDescription(
@@ -47,8 +47,8 @@ def generate_launch_description():
             launch_arguments={
                 'interface': interface,
                 'enable_collision_avoidance': LaunchConfiguration('enable_collision_avoidance'),
-                'send_cmds_to_robot': 'true',
-                'publish_joint_states_opensot': 'false',
+                'send_cmds_to_robot': 'false',
+                'publish_joint_states_opensot': 'true',
             }.items(),
         ),
     ])

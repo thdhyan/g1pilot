@@ -12,11 +12,14 @@ from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
 from astroviz_interfaces.msg import MotorState, MotorStateList
 
 #CLOSE_RIGHT_VALUES = [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
-CLOSE_RIGHT_VALUES = [0.00,  0.0,  0.0, 0.0, 1.6, 0.0, 1.6]
+CLOSE_RIGHT_VALUES_1 = [0.00,  0.0,  0.0, 1.2, 1.6, 0.0, 0.0] # 1 finger
+CLOSE_RIGHT_VALUES_2 = [0.00,  0.0,  0.0, 1.2, 1.6, 1.2, 1.6] # closed Hand
+CLOSE_LEFT_VALUES_1  = [0.04,  0.6,  1.4, -1.2, -1.4, -0.0, 0.0] # 1 finger
+CLOSE_LEFT_VALUES_2  = [0.04,  0.6,  1.4, -1.2, -1.6, -1.2, -1.4] # closed Hand
 # CLOSE_LEFT_VALUES  = [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
 # CLOSE_LEFT_VALUES  = [0.04,  0.4,  1.5, -1.10, -1.58, -1.13, -1.32] motor gripper
-CLOSE_LEFT_VALUES  = [0.04,  0.6,  1.4, -1.2, -1.6, -1.2, -1.4] #+10 degrees on each middle fingers joints
-OPEN_VALUES        = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+OPEN_VALUES          = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 class DX3Controller(Node):
     def __init__(self):
@@ -54,18 +57,26 @@ class DX3Controller(Node):
         self.create_timer(0.05, self.publish_commands)
 
     def right_action_callback(self, msg: PointStamped):
-        if msg.point.x > 0.5:
+        if msg.point.x < -0.5:
+            self.right_action = "close_1"
+            self.right_target = CLOSE_RIGHT_VALUES_1
+        elif msg.point.x > 0.5:
             self.right_action = "open"
+            self.right_target = OPEN_VALUES
         else:
-            self.right_action = "close"
-        self.right_target = CLOSE_RIGHT_VALUES if self.right_action == "close" else OPEN_VALUES
+            self.right_action = "close_2"
+            self.right_target = CLOSE_RIGHT_VALUES_2
 
     def left_action_callback(self, msg: PointStamped):
-        if msg.point.x > 0.5:
+        if msg.point.x < -0.5:
+            self.left_action = "close_1"
+            self.left_target = CLOSE_LEFT_VALUES_1
+        elif msg.point.x > 0.5:
             self.left_action = "open"
+            self.left_target = OPEN_VALUES
         else:
-            self.left_action = "close"
-        self.left_target = CLOSE_LEFT_VALUES if self.left_action == "close" else OPEN_VALUES
+            self.left_action = "close_2"
+            self.left_target = CLOSE_LEFT_VALUES_2
 
     def left_callback(self, msg: HandState_):
         motor_list_msg = MotorStateList()

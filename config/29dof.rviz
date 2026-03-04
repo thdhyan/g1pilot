@@ -6,6 +6,7 @@ Panels:
       Expanded:
         - /Global Options1
         - /Status1
+        - /RobotModel1
         - /TF1/Frames1
         - /Nav2Goal1/RobotOdometry1/Shape1
         - /Controller1/InteractiveMarkers1
@@ -55,7 +56,7 @@ Visualization Manager:
       Value: true
     - Alpha: 1
       Class: rviz_default_plugins/RobotModel
-      Collision Enabled: false
+      Collision Enabled: true
       Description File: ""
       Description Source: Topic
       Description Topic:
@@ -473,6 +474,8 @@ Visualization Manager:
       Show Axes: true
       Show Names: false
       Tree:
+        base_link:
+          {}
         world:
           pelvis:
             imu_in_pelvis:
@@ -974,10 +977,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.009999999776482582
-      Pitch: 0.19479681551456451
+      Pitch: -0.2102031707763672
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 4.838629245758057
+      Yaw: 5.943638324737549
     Saved: ~
 Window Geometry:
   Displays:
@@ -996,4 +999,4 @@ Window Geometry:
     collapsed: true
   Width: 1680
   X: 1920
-  Y: 0
+  Y: 150

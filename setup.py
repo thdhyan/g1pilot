@@ -28,6 +28,7 @@ setup(
             'launch/manipulation_launcher.launch.py',
 
             'launch/bringup_launcher.launch.py',
+            'launch/bringup_opensot.launch.py',
         ]),
 
         # URDF / XML

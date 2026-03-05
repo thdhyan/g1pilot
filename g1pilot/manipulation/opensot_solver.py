@@ -94,11 +94,15 @@ class G1CollisionAvoidanceNode(Node):
         self.declare_parameter("interface", "")
         self.declare_parameter("send_cmds_to_robot", True)
         self.declare_parameter("publish_joint_states_opensot", False)
+        self.declare_parameter("enable_external_collision_avoidance", False)
+        self.declare_parameter("box_pose_topic", "/g1pilot/box_pose")
         self.interface = str(self.get_parameter("interface").value)
         self.use_robot = bool(self.get_parameter("use_robot").value)
         self.enable_collision_avoidance = bool(self.get_parameter("enable_collision_avoidance").value)
         self.send_cmds_to_robot = bool(self.get_parameter("send_cmds_to_robot").value)
         self.publish_joint_states_opensot = bool(self.get_parameter("publish_joint_states_opensot").value)
+        self.enable_external_collision_avoidance = bool(self.get_parameter("enable_external_collision_avoidance").value)
+        self.box_pose_topic = str(self.get_parameter("box_pose_topic").value)
 
         self.control_dt = 0.005
         self.time = 0.0
@@ -114,6 +118,8 @@ class G1CollisionAvoidanceNode(Node):
         self.emergency_stop = False
         self._initialized = False
         self.start_opensot = False
+
+        self.box_pose = None
 
 
 
@@ -167,6 +173,12 @@ class G1CollisionAvoidanceNode(Node):
         self.menu_entry_ids = {}
 
         self.collision_distances_publisher = self.create_publisher(Marker, 'collision_distances', 10)
+
+        if self.enable_external_collision_avoidance:
+            self.box_obstacle_publisher = self.create_publisher(Marker, 'box_obstacle', 10)
+            self.box_pose_subscriber = self.create_subscription(
+                Marker, self.box_pose_topic, self.box_pose_callback, 10
+            )
 
         self.right_hand_frame_ref = "pelvis"
         self.left_hand_frame_ref = "pelvis"
@@ -269,6 +281,9 @@ class G1CollisionAvoidanceNode(Node):
 
     def emergency_stop_callback(self, msg: Bool):
         self.emergency_stop = bool(msg.data)
+
+    def box_pose_callback(self, msg: Marker):
+        self.box_pose = msg
 
     def initialize_imarkers(self):
         self.marker_enabled = {}
@@ -511,58 +526,73 @@ class G1CollisionAvoidanceNode(Node):
         self.dqlims = VelocityLimits(self.model, self.dqmax, self.control_dt)
 
         # self.collision_avoidance_constraint = None
-        # if self.enable_collision_avoidance:
-        self.get_logger().info("Constraints: Self-Collision Avoidance")
-        self.collision_avoidance_constraint = CollisionAvoidance(
-            self.model, max_pairs=50, collision_urdf=self.urdf)#, collision_srdf=self.urdf)
+        if self.enable_collision_avoidance:
+            self.get_logger().info("Constraints: Self-Collision Avoidance")
+            self.collision_avoidance_constraint = CollisionAvoidance(
+                self.model, max_pairs=50, collision_urdf=self.urdf)#, collision_srdf=self.urdf)
 
-        # All arm links and torso now have primitive collision geometries in g1_29dof.urdf.
-        collision_list = {
-            # Left arm vs torso
-            ("left_shoulder_yaw_link", "torso_link"),
-            ("left_elbow_link", "torso_link"),
-            ("left_wrist_roll_link", "torso_link"),
-            ("left_wrist_pitch_link", "torso_link"),
-            ("left_wrist_yaw_link", "torso_link"),
-            ("left_rubber_hand", "torso_link"),
-            # Right arm vs torso
-            ("right_shoulder_yaw_link", "torso_link"),
-            ("right_elbow_link", "torso_link"),
-            ("right_wrist_roll_link", "torso_link"),
-            ("right_wrist_pitch_link", "torso_link"),
-            ("right_wrist_yaw_link", "torso_link"),
-            ("right_rubber_hand", "torso_link"),
-            # hip
-            ("left_rubber_hand", "waist_yaw_link"),
-            ("right_rubber_hand", "waist_yaw_link"),
-            # pelvis
-            ("left_rubber_hand", "pelvis_contour_link"),
-            ("right_rubber_hand", "pelvis_contour_link"),
-            # Left hand vs legs
-            ("left_rubber_hand", "left_hip_pitch_link"),
-            ("left_rubber_hand", "left_hip_roll_link"),
-            ("left_rubber_hand", "left_hip_yaw_link"),
-            ("left_rubber_hand", "left_knee_link"),
-            ("left_rubber_hand", "right_hip_pitch_link"),
-            ("left_rubber_hand", "right_hip_roll_link"),
-            ("left_rubber_hand", "right_hip_yaw_link"),
-            ("left_rubber_hand", "right_knee_link"),
-            # Right hand vs legs
-            ("right_rubber_hand", "left_hip_pitch_link"),
-            ("right_rubber_hand", "left_hip_roll_link"),
-            ("right_rubber_hand", "left_hip_yaw_link"),
-            ("right_rubber_hand", "left_knee_link"),
-            ("right_rubber_hand", "right_hip_pitch_link"),
-            ("right_rubber_hand", "right_hip_roll_link"),
-            ("right_rubber_hand", "right_hip_yaw_link"),
-            ("right_rubber_hand", "right_knee_link"),
-        }
+            # All arm links and torso now have primitive collision geometries in g1_29dof.urdf.
+            collision_list = {
+                # Left arm vs torso
+                ("left_shoulder_yaw_link", "torso_link"),
+                ("left_elbow_link", "torso_link"),
+                ("left_wrist_roll_link", "torso_link"),
+                ("left_wrist_pitch_link", "torso_link"),
+                ("left_wrist_yaw_link", "torso_link"),
+                ("left_rubber_hand", "torso_link"),
+                # Right arm vs torso
+                ("right_shoulder_yaw_link", "torso_link"),
+                ("right_elbow_link", "torso_link"),
+                ("right_wrist_roll_link", "torso_link"),
+                ("right_wrist_pitch_link", "torso_link"),
+                ("right_wrist_yaw_link", "torso_link"),
+                ("right_rubber_hand", "torso_link"),
+                # hip
+                ("left_rubber_hand", "waist_yaw_link"),
+                ("right_rubber_hand", "waist_yaw_link"),
+                # pelvis
+                ("left_rubber_hand", "pelvis_contour_link"),
+                ("right_rubber_hand", "pelvis_contour_link"),
+                # Left hand vs legs
+                ("left_rubber_hand", "left_hip_pitch_link"),
+                ("left_rubber_hand", "left_hip_roll_link"),
+                ("left_rubber_hand", "left_hip_yaw_link"),
+                ("left_rubber_hand", "left_knee_link"),
+                ("left_rubber_hand", "right_hip_pitch_link"),
+                ("left_rubber_hand", "right_hip_roll_link"),
+                ("left_rubber_hand", "right_hip_yaw_link"),
+                ("left_rubber_hand", "right_knee_link"),
+                # Right hand vs legs
+                ("right_rubber_hand", "left_hip_pitch_link"),
+                ("right_rubber_hand", "left_hip_roll_link"),
+                ("right_rubber_hand", "left_hip_yaw_link"),
+                ("right_rubber_hand", "left_knee_link"),
+                ("right_rubber_hand", "right_hip_pitch_link"),
+                ("right_rubber_hand", "right_hip_roll_link"),
+                ("right_rubber_hand", "right_hip_yaw_link"),
+                ("right_rubber_hand", "right_knee_link"),
+            }
 
-        self.collision_avoidance_constraint.setCollisionList(collision_list)
-        self.collision_avoidance_constraint.setBoundScaling(0.1)
-        self.collision_avoidance_constraint.setLinkPairThreshold(0.01)
-        self.collision_avoidance_constraint.setDetectionThreshold(-1)
-        
+            self.collision_avoidance_constraint.setCollisionList(collision_list)
+            self.collision_avoidance_constraint.setBoundScaling(0.1)
+            self.collision_avoidance_constraint.setLinkPairThreshold(0.01)
+            self.collision_avoidance_constraint.setDetectionThreshold(-1)
+            self.stack = ((
+                self.base#%[0,1,3,4,5]
+                / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
+                / self.postural)
+                << self.qlims
+                << self.dqlims
+                << self.collision_avoidance_constraint
+            )
+        else:
+            self.stack = ((
+                self.base#%[0,1,3,4,5]
+                / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
+                / self.postural)
+                << self.qlims
+                << self.dqlims
+            )
 
         # self.com_xy = self.com % [0, 1]
         # self.stack = (
@@ -572,14 +602,6 @@ class G1CollisionAvoidanceNode(Node):
         #     << self.qlims
         #     << self.dqlims
         # )
-        self.stack = ((
-            self.base#%[0,1,3,4,5]
-            / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
-            / self.postural)
-            << self.qlims
-            << self.dqlims
-            << self.collision_avoidance_constraint
-        )
             
         self.stack.update()
         self.solver = pysot.iHQP(self.stack, eps_regularisation=1e11)
@@ -624,6 +646,31 @@ class G1CollisionAvoidanceNode(Node):
                 T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
                 T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
                 self.left_gripper.setReference(T)
+
+            # external box collision avoidance
+            if self.enable_external_collision_avoidance and self.box_pose is not None:
+                w_T_box = pyaffine3.Affine3()
+                w_T_box.translation = np.array([
+                    self.box_pose.pose.position.x,
+                    self.box_pose.pose.position.y,
+                    self.box_pose.pose.position.z])
+                w_T_box.linear = R.from_quat([
+                    self.box_pose.pose.orientation.x,
+                    self.box_pose.pose.orientation.y,
+                    self.box_pose.pose.orientation.z,
+                    self.box_pose.pose.orientation.w]).as_matrix()
+
+                if not self.collision_avoidance_constraint.setCollisionShapeActive("box", True):
+                    box = pyxbot2_collision.shape.Box()
+                    box.size = np.array([
+                        self.box_pose.scale.x,
+                        self.box_pose.scale.y,
+                        self.box_pose.scale.z])
+                    self.collision_avoidance_constraint.addCollisionShape(
+                        "box", "world", box, w_T_box, [])
+                    self.get_logger().info(f"Box added: pos={w_T_box.translation}, size={box.size}")
+                else:
+                    self.collision_avoidance_constraint.moveCollisionShape("box", w_T_box)
 
             # solve
             self.stack.update()
@@ -728,7 +775,12 @@ class G1CollisionAvoidanceNode(Node):
                 self.lowcmd_publisher.Write(self.msg)
 
             # publish self-collision debugging
-            self.publishCollisionDistances(self.collision_avoidance_constraint.getOrderedWitnessPointVector(), self.get_clock().now().to_msg())
+            if self.enable_collision_avoidance:
+                self.publishCollisionDistances(self.collision_avoidance_constraint.getOrderedWitnessPointVector(), self.get_clock().now().to_msg())
+
+            # publish box obstacle visualization
+            if self.enable_external_collision_avoidance and self.box_pose is not None:
+                self.publishBoxObstacle(self.get_clock().now().to_msg())
 
     def publishCollisionDistances(self, collision_distance_points, time):
         marker = Marker()
@@ -766,7 +818,22 @@ class G1CollisionAvoidanceNode(Node):
 
 
         self.collision_distances_publisher.publish(marker)
-        
+
+    def publishBoxObstacle(self, time):
+        marker = Marker()
+        marker.header.frame_id = self.box_pose.header.frame_id
+        marker.header.stamp = time
+        marker.ns = "box_obstacle"
+        marker.id = 0
+        marker.type = Marker.CUBE
+        marker.action = Marker.ADD
+        marker.scale = self.box_pose.scale
+        marker.color.r = 0.8
+        marker.color.g = 0.5
+        marker.color.b = 0.2
+        marker.color.a = 0.5
+        marker.pose = self.box_pose.pose
+        self.box_obstacle_publisher.publish(marker)
 
 
 def main(args=None):

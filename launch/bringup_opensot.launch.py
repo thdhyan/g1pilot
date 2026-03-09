@@ -22,6 +22,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("enable_collision_avoidance", default_value="true"),
+        DeclareLaunchArgument("enable_external_collision_avoidance", default_value="false"),
+        DeclareLaunchArgument("box_pose_topic", default_value="/g1pilot/box_pose"),
         DeclareLaunchArgument(
             "interface",
             default_value=EnvironmentVariable("G1_INTERFACE"),
@@ -47,6 +49,8 @@ def generate_launch_description():
             launch_arguments={
                 'interface': interface,
                 'enable_collision_avoidance': LaunchConfiguration('enable_collision_avoidance'),
+                'enable_external_collision_avoidance': LaunchConfiguration('enable_external_collision_avoidance'),
+                'box_pose_topic': LaunchConfiguration('box_pose_topic'),
                 'send_cmds_to_robot': 'false',
                 'publish_joint_states_opensot': 'true',
             }.items(),

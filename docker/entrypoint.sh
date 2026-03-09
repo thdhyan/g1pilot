@@ -10,6 +10,9 @@ cd /ros2_ws &&
 ./cbuild &&
 source setup_uri.sh ${G1_INTERFACE} &&
 source install/setup.bash &&
-ros2 launch g1pilot bringup_launcher.launch.py enable_collision_avoidance:=${ENABLE_COLLISION_AVOIDANCE:-false}
+ros2 launch g1pilot ${G1_LAUNCH_FILE:-bringup_opensot.launch.py} \
+    enable_collision_avoidance:=${ENABLE_COLLISION_AVOIDANCE:-false} \
+    enable_external_collision_avoidance:=${ENABLE_EXTERNAL_COLLISION_AVOIDANCE:-false} \
+    box_pose_topic:=${BOX_POSE_TOPIC:-/g1pilot/box_pose}
 '
 #unset RMW_IMPLEMENTATION &&

@@ -33,11 +33,11 @@ from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, Cha
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
+from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
 
 from g1pilot.utils.common import (
     MotorState,
     G1_29_JointArmIndex,
-    G1_29_JointWristIndex,
     G1_29_JointWeakIndex,
     G1_29_JointWaistIndex,
     G1_29_JointIndex,
@@ -45,6 +45,93 @@ from g1pilot.utils.common import (
 )
 
 G1_NUM_MOTOR = 29 # 12 body + 17 arm
+
+# Per-joint PD gains and feedforward torque: {joint_name: (kp, kd, tau)}
+# From Unitree G1 Table 5.1
+JOINT_GAINS = {
+    # Left leg
+    "kLeftHipPitch":   (600.0, 10.0, 0.0),
+    "kLeftHipRoll":    (700.0, 10.0, 0.0),
+    "kLeftHipYaw":     (500.0, 10.0, 0.0),
+    "kLeftKnee":       (1000.0, 10.0, 0.0),
+    "kLeftAnklePitch": (900.0, 10.0, 20.0),  # tau = gravity feedforward
+    "kLeftAnkleRoll":  (500.0, 10.0, 0.0),
+    # Right leg
+    "kRightHipPitch":   (600.0, 10.0, 0.0),
+    "kRightHipRoll":    (700.0, 10.0, 0.0),
+    "kRightHipYaw":     (500.0, 10.0, 0.0),
+    "kRightKnee":       (1000.0, 10.0, 0.0),
+    "kRightAnklePitch": (900.0, 10.0, 20.0),  # tau = gravity feedforward
+    "kRightAnkleRoll":  (500.0, 10.0, 0.0),
+    # Waist
+    "kWaistYaw":   (400.0, 10.0, 0.0),
+    "kWaistRoll":  (400.0, 10.0, 0.0),
+    "kWaistPitch": (400.0, 10.0, 0.0),
+    # Left arm
+    "kLeftShoulderPitch": (100.0, 2.0, 0.0),
+    "kLeftShoulderRoll":  (100.0, 2.0, 0.0),
+    "kLeftShoulderYaw":   (50.0,  2.0, 0.0),
+    "kLeftElbow":         (50.0,  2.0, 0.0),
+    "kLeftWristRoll":     (20.0,  1.0, 0.0),
+    "kLeftWristPitch":    (20.0,  1.0, 0.0),
+    "kLeftWristyaw":      (20.0,  1.0, 0.0),
+    # Right arm
+    "kRightShoulderPitch": (100.0, 2.0, 0.0),
+    "kRightShoulderRoll":  (100.0, 2.0, 0.0),
+    "kRightShoulderYaw":   (50.0,  2.0, 0.0),
+    "kRightElbow":         (50.0,  2.0, 0.0),
+    "kRightWristRoll":     (20.0,  1.0, 0.0),
+    "kRightWristPitch":    (20.0,  1.0, 0.0),
+    "kRightWristYaw":      (20.0,  1.0, 0.0),
+}
+
+# Build index-based lookup: {motor_index: (kp, kd, tau)}
+JOINT_GAINS_BY_ID = {
+    G1_29_JointIndex[name].value: gains
+    for name, gains in JOINT_GAINS.items()
+}
+
+# Self-collision link pairs to monitor
+COLLISION_PAIRS = {
+    # Left arm vs torso
+    ("left_shoulder_yaw_link", "torso_link"),
+    ("left_elbow_link", "torso_link"),
+    ("left_wrist_roll_link", "torso_link"),
+    ("left_wrist_pitch_link", "torso_link"),
+    ("left_wrist_yaw_link", "torso_link"),
+    ("left_rubber_hand", "torso_link"),
+    # Right arm vs torso
+    ("right_shoulder_yaw_link", "torso_link"),
+    ("right_elbow_link", "torso_link"),
+    ("right_wrist_roll_link", "torso_link"),
+    ("right_wrist_pitch_link", "torso_link"),
+    ("right_wrist_yaw_link", "torso_link"),
+    ("right_rubber_hand", "torso_link"),
+    # hip
+    ("left_rubber_hand", "waist_yaw_link"),
+    ("right_rubber_hand", "waist_yaw_link"),
+    # pelvis
+    ("left_rubber_hand", "pelvis_contour_link"),
+    ("right_rubber_hand", "pelvis_contour_link"),
+    # Left hand vs legs
+    ("left_rubber_hand", "left_hip_pitch_link"),
+    ("left_rubber_hand", "left_hip_roll_link"),
+    ("left_rubber_hand", "left_hip_yaw_link"),
+    ("left_rubber_hand", "left_knee_link"),
+    ("left_rubber_hand", "right_hip_pitch_link"),
+    ("left_rubber_hand", "right_hip_roll_link"),
+    ("left_rubber_hand", "right_hip_yaw_link"),
+    ("left_rubber_hand", "right_knee_link"),
+    # Right hand vs legs
+    ("right_rubber_hand", "left_hip_pitch_link"),
+    ("right_rubber_hand", "left_hip_roll_link"),
+    ("right_rubber_hand", "left_hip_yaw_link"),
+    ("right_rubber_hand", "left_knee_link"),
+    ("right_rubber_hand", "right_hip_pitch_link"),
+    ("right_rubber_hand", "right_hip_roll_link"),
+    ("right_rubber_hand", "right_hip_yaw_link"),
+    ("right_rubber_hand", "right_knee_link"),
+}
 
 q_init = [
         -0.1,
@@ -96,6 +183,9 @@ class G1CollisionAvoidanceNode(Node):
         self.declare_parameter("publish_joint_states_opensot", False)
         self.declare_parameter("enable_external_collision_avoidance", False)
         self.declare_parameter("box_pose_topic", "/g1pilot/box_pose")
+        self.declare_parameter("use_whole_body", False)
+        self.declare_parameter("right_hand_frame_ref", "pelvis")
+        self.declare_parameter("left_hand_frame_ref", "pelvis")
         self.interface = str(self.get_parameter("interface").value)
         self.use_robot = bool(self.get_parameter("use_robot").value)
         self.enable_collision_avoidance = bool(self.get_parameter("enable_collision_avoidance").value)
@@ -103,6 +193,7 @@ class G1CollisionAvoidanceNode(Node):
         self.publish_joint_states_opensot = bool(self.get_parameter("publish_joint_states_opensot").value)
         self.enable_external_collision_avoidance = bool(self.get_parameter("enable_external_collision_avoidance").value)
         self.box_pose_topic = str(self.get_parameter("box_pose_topic").value)
+        self.use_whole_body = bool(self.get_parameter("use_whole_body").value)
 
         self.control_dt = 0.005
         self.time = 0.0
@@ -180,8 +271,8 @@ class G1CollisionAvoidanceNode(Node):
                 Marker, self.box_pose_topic, self.box_pose_callback, 10
             )
 
-        self.right_hand_frame_ref = "pelvis"
-        self.left_hand_frame_ref = "pelvis"
+        self.right_hand_frame_ref = str(self.get_parameter("right_hand_frame_ref").value)
+        self.left_hand_frame_ref = str(self.get_parameter("left_hand_frame_ref").value)
 
         self.motor_state = [MotorState() for _ in range(35)]
         self.lowstate_buffer = DataBuffer()
@@ -192,6 +283,15 @@ class G1CollisionAvoidanceNode(Node):
         self.crc = None
         self.msg = None
         self.all_motor_q = None
+
+        self._wb_init_active = False
+        self._wb_init_done = False
+        self._wb_q_start = None
+        self._wb_init_start_time = None
+        self._wb_init_duration = 3.0
+
+        # Precompute joint index sets (hardware-independent, used by motor command helpers)
+        self._leg_joint_ids = [j for j in G1_29_JointIndex if j.value < 12]
 
         if self.use_robot:
             self.get_logger().info("use_robot=True -> Initializing Unitree DDS interface")
@@ -217,13 +317,25 @@ class G1CollisionAvoidanceNode(Node):
     def initialize_interface(self):
         ChannelFactoryInitialize(0, self.interface)
 
+        # Ensure the robot is in FSM=1 (Damp) for LowCmd control.
+        # SetFsmId(4) first exits sport mode (200) if active, then Damp() = FSM=1.
+        # loco = LocoClient()
+        # loco.SetTimeout(10.0)
+        # loco.Init()
+        # loco.SetFsmId(4)
+        # time.sleep(0.5)
+        # loco.Damp()
+        # time.sleep(0.5)
+        # self.get_logger().info("[WB] FSM reset to Damp (FSM=1) via LocoClient")
+
         self.lowstate_subscriber = ChannelSubscriber("rt/lowstate", LowState_)
         self.lowstate_subscriber.Init()
 
         self.subscribe_thread = threading.Thread(target=self._subscribe_motor_state, daemon=True)
         self.subscribe_thread.start()
 
-        self.lowcmd_publisher = ChannelPublisher("rt/arm_sdk", LowCmd_)
+        topic = "rt/lowcmd" if self.use_whole_body else "rt/arm_sdk"
+        self.lowcmd_publisher = ChannelPublisher(topic, LowCmd_)
         self.lowcmd_publisher.Init()
 
         while not self.lowstate_buffer.GetData():
@@ -237,23 +349,9 @@ class G1CollisionAvoidanceNode(Node):
 
         self.all_motor_q = self.get_current_motor_q()
 
-        self.kp_high = 300.0
-        self.kd_high = 3.0
-        self.kp_low = 150.0
-        self.kd_low = 4.0
-        self.kp_wrist = 40.0
-        self.kd_wrist = 1.5
-
-        wrist_vals = {m.value for m in G1_29_JointWristIndex}
-        for jid in G1_29_JointArmIndex:
-            self.msg.motor_cmd[jid].mode = 1
-            if jid.value in wrist_vals:
-                self.msg.motor_cmd[jid].kp = self.kp_wrist
-                self.msg.motor_cmd[jid].kd = self.kd_wrist
-            else:
-                self.msg.motor_cmd[jid].kp = self.kp_low
-                self.msg.motor_cmd[jid].kd = self.kd_low
-            self.msg.motor_cmd[jid].q = float(self.all_motor_q[jid.value])
+        self._apply_upper_body_cmds(self.all_motor_q)
+        if self.use_whole_body:
+            self._apply_leg_cmds(self.all_motor_q)
 
         self._initialized = True
 
@@ -269,6 +367,40 @@ class G1CollisionAvoidanceNode(Node):
         for i in range(29):
             q[i] = msg.motor_state[i].q
         return q
+
+    def _apply_upper_body_cmds(self, q29):
+        """Set arm and waist motor commands from a 29-element joint position array."""
+        for jid in list(G1_29_JointArmIndex) + list(G1_29_JointWaistIndex):
+            kp, kd, tau = JOINT_GAINS_BY_ID[jid.value]
+            self.msg.motor_cmd[jid].mode = 1
+            self.msg.motor_cmd[jid].kp = kp
+            self.msg.motor_cmd[jid].kd = kd
+            self.msg.motor_cmd[jid].dq = 0.0
+            self.msg.motor_cmd[jid].tau = tau
+            self.msg.motor_cmd[jid].q = float(q29[jid.value])
+
+    def _apply_leg_cmds(self, q29):
+        """Set leg motor commands from a 29-element joint position array (whole-body mode)."""
+        for jid in self._leg_joint_ids:
+            kp, kd, tau = JOINT_GAINS_BY_ID[jid.value]
+            self.msg.motor_cmd[jid].mode = 1
+            self.msg.motor_cmd[jid].kp = kp
+            self.msg.motor_cmd[jid].kd = kd
+            self.msg.motor_cmd[jid].dq = 0.0
+            self.msg.motor_cmd[jid].tau = tau
+            self.msg.motor_cmd[jid].q = float(q29[jid.value])
+
+    def _publish_lowcmd(self):
+        """Sync mode_machine, set mode_pr, compute CRC and publish LowCmd."""
+        self.msg.mode_machine = self.get_mode_machine()
+        self.msg.mode_pr = 0 if self.use_whole_body else 1
+        try:
+            self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0
+        except Exception:
+            pass
+        self.msg.crc = self.crc.Crc(self.msg)
+        if self.send_cmds_to_robot:
+            self.lowcmd_publisher.Write(self.msg)
 
     def right_hand_pose_ref_callback(self, msg: PoseStamped):
         self.right_hand_pose_ref = msg
@@ -468,7 +600,13 @@ class G1CollisionAvoidanceNode(Node):
         self.q = np.zeros(self.model.nq)
         self.q[2] = 0.6756
         self.q[6] = 1.0
-        self.q[7: ] = q_init[0:].copy()
+        # if self.use_whole_body and self.use_robot and hasattr(self, 'all_motor_q') and self.all_motor_q is not None:
+        #     # Initialize from actual robot state so the solver doesn't
+        #     # immediately command the legs away from their current position
+        #     self.q[7:] = self.all_motor_q[:29].copy()
+        # else:
+        #     self.q[7:] = q_init[0:].copy()
+        self.q[7:] = q_init[0:].copy()
 
         self.dq = np.zeros(self.model.nv)
 
@@ -477,6 +615,10 @@ class G1CollisionAvoidanceNode(Node):
         self.model.update()
 
         self.com = CoM(self.model)
+        # Offset CoM reference slightly backward (negative X) for stability
+        com_ref_init, _ = self.com.getReference()
+        com_ref_init[0] -= 0.025  # 2.5 cm backward
+        self.com.setReference(com_ref_init)
 
         self.get_logger().warning("Initializing OpenSoT Tasks and Constraints")
 
@@ -487,6 +629,10 @@ class G1CollisionAvoidanceNode(Node):
         self.get_logger().info("Task: Torso")
         self.torso = Cartesian("torso_task", self.model, "torso_link", manipulation_frame)
         self.torso.setLambda(0.1)
+
+        self.get_logger().info("Task: Pelvis")
+        self.pelvis = Cartesian("pelvis_task", self.model, "pelvis", manipulation_frame)
+        self.pelvis.setLambda(0.1)
 
         self.get_logger().info("Task: Right Gripper")
         self.right_gripper = Cartesian(
@@ -508,10 +654,16 @@ class G1CollisionAvoidanceNode(Node):
 
         self.get_logger().info("Task: Postural")
         self.postural = Postural(self.model)
-        self.postural.setLambda(0.1)
+        self.postural.setLambda(0.3) # coman uses 0.01 ?
         self.W = self.postural.getWeight().copy()
-        #W[0:6, 0:6] = 0.0
-        #W[6:10, 6:10] = 0.0
+        if self.use_whole_body:
+            # Zero floating base DOFs so the postural task doesn't fight
+            # against leg bending by trying to restore the pelvis pose
+            self.W[0:6, 0:6] = 0.0
+            # Always target q_init regardless of actual robot state at startup
+            q_ref = np.zeros(self.model.nv)
+            q_ref[6:] = q_init
+            self.postural.setReference(q_ref)
         print(self.W.shape)
         self.postural.setWeight(self.W)
 
@@ -531,52 +683,47 @@ class G1CollisionAvoidanceNode(Node):
             self.collision_avoidance_constraint = CollisionAvoidance(
                 self.model, max_pairs=50, collision_urdf=self.urdf)#, collision_srdf=self.urdf)
 
-            # All arm links and torso now have primitive collision geometries in g1_29dof.urdf.
-            collision_list = {
-                # Left arm vs torso
-                ("left_shoulder_yaw_link", "torso_link"),
-                ("left_elbow_link", "torso_link"),
-                ("left_wrist_roll_link", "torso_link"),
-                ("left_wrist_pitch_link", "torso_link"),
-                ("left_wrist_yaw_link", "torso_link"),
-                ("left_rubber_hand", "torso_link"),
-                # Right arm vs torso
-                ("right_shoulder_yaw_link", "torso_link"),
-                ("right_elbow_link", "torso_link"),
-                ("right_wrist_roll_link", "torso_link"),
-                ("right_wrist_pitch_link", "torso_link"),
-                ("right_wrist_yaw_link", "torso_link"),
-                ("right_rubber_hand", "torso_link"),
-                # hip
-                ("left_rubber_hand", "waist_yaw_link"),
-                ("right_rubber_hand", "waist_yaw_link"),
-                # pelvis
-                ("left_rubber_hand", "pelvis_contour_link"),
-                ("right_rubber_hand", "pelvis_contour_link"),
-                # Left hand vs legs
-                ("left_rubber_hand", "left_hip_pitch_link"),
-                ("left_rubber_hand", "left_hip_roll_link"),
-                ("left_rubber_hand", "left_hip_yaw_link"),
-                ("left_rubber_hand", "left_knee_link"),
-                ("left_rubber_hand", "right_hip_pitch_link"),
-                ("left_rubber_hand", "right_hip_roll_link"),
-                ("left_rubber_hand", "right_hip_yaw_link"),
-                ("left_rubber_hand", "right_knee_link"),
-                # Right hand vs legs
-                ("right_rubber_hand", "left_hip_pitch_link"),
-                ("right_rubber_hand", "left_hip_roll_link"),
-                ("right_rubber_hand", "left_hip_yaw_link"),
-                ("right_rubber_hand", "left_knee_link"),
-                ("right_rubber_hand", "right_hip_pitch_link"),
-                ("right_rubber_hand", "right_hip_roll_link"),
-                ("right_rubber_hand", "right_hip_yaw_link"),
-                ("right_rubber_hand", "right_knee_link"),
-            }
-
-            self.collision_avoidance_constraint.setCollisionList(collision_list)
+            self.collision_avoidance_constraint.setCollisionList(COLLISION_PAIRS)
             self.collision_avoidance_constraint.setBoundScaling(0.1)
             self.collision_avoidance_constraint.setLinkPairThreshold(0.01)
             self.collision_avoidance_constraint.setDetectionThreshold(-1)
+
+        if self.use_whole_body:
+            self.get_logger().info("Task: Left Foot (contact constraint)")
+            self.left_foot = Cartesian("left_foot_task", self.model, "left_ankle_roll_link", "world")
+            self.get_logger().info("Task: Right Foot (contact constraint)")
+            self.right_foot = Cartesian("right_foot_task", self.model, "right_ankle_roll_link", "world")
+            # No setLambda on foot tasks: used as hard constraints via <<
+
+            # CoM XY only: keeps lateral balance but allows squatting (Z free)
+
+            # Pelvis orientation only (roll, pitch, yaw): keeps torso upright
+            # while still allowing vertical translation (squatting)
+
+            # Torso roll + pitch only (yaw free): keeps torso reasonably upright
+            # at lower priority than the hands
+
+            if self.enable_collision_avoidance:
+                self.stack = (
+                    self.com % [0, 1] 
+                    / (self.right_gripper + self.left_gripper  + 0.01 * self.pelvis%[2])
+                    / (self.torso%[3,4] + self.pelvis%[0,1,3,4,5])
+                    / self.postural
+                    << self.qlims
+                    << self.dqlims
+                    << self.collision_avoidance_constraint
+                    << (self.left_foot + self.right_foot)
+                )
+            else:
+                self.stack = (
+                    (self.com % [0, 1] + self.right_gripper + self.left_gripper)
+                    / self.torso_rp
+                    / self.postural
+                    << self.qlims
+                    << self.dqlims
+                    << (self.left_foot + self.right_foot)
+                )
+        elif self.enable_collision_avoidance:
             self.stack = ((
                 self.base#%[0,1,3,4,5]
                 / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
@@ -610,9 +757,28 @@ class G1CollisionAvoidanceNode(Node):
     # Control loop
     # ----------------------------
     def control_loop(self):
-        wrist_vals = {m.value for m in G1_29_JointWristIndex}
+        # Whole-body gradual init: triggered by start_opensot, interpolates to q_init first
+        if self.use_whole_body and self.start_opensot and not self._wb_init_done:
+            if not self._wb_init_active:
+                # First tick after start_opensot: read fresh robot state and begin
+                self._wb_q_start = self.get_current_motor_q()
+                self._wb_init_start_time = time.time()
+                self._wb_init_active = True
+                self.get_logger().info("[WB] start_opensot received: 3s gradual init to q_init")
+            elapsed = time.time() - self._wb_init_start_time
+            alpha = min(elapsed / self._wb_init_duration, 1.0)
+            if self.use_robot and self.lowcmd_publisher is not None and not self.emergency_stop:
+                q_interp = (1.0 - alpha) * self._wb_q_start + alpha * np.array(q_init)
+                self._apply_upper_body_cmds(q_interp)
+                self._apply_leg_cmds(q_interp)
+                self._publish_lowcmd()
+            if alpha >= 1.0:
+                self._wb_init_active = False
+                self._wb_init_done = True
+                self.get_logger().info("[WB] Gradual init complete. OpenSoT starting.")
+            return
 
-        if self.start_opensot and not self.emergency_stop:
+        if self.start_opensot and not self.emergency_stop and (not self.use_whole_body or self._wb_init_done):
             self.model.setJointPosition(self.q)
             self.model.setJointVelocity(self.dq)
             self.model.update()
@@ -727,14 +893,10 @@ class G1CollisionAvoidanceNode(Node):
 
             if self.emergency_stop or not self.motors_on:
                 for jid in G1_29_JointArmIndex:
+                    kp, kd, _ = JOINT_GAINS_BY_ID[jid.value]
                     self.msg.motor_cmd[jid].mode = 0
-                    if jid.value in wrist_vals:
-                        self.msg.motor_cmd[jid].kp = self.kp_wrist
-                        self.msg.motor_cmd[jid].kd = self.kd_wrist
-                    else:
-                        self.msg.motor_cmd[jid].kp = self.kp_low
-                        self.msg.motor_cmd[jid].kd = self.kd_low
-
+                    self.msg.motor_cmd[jid].kp = kp
+                    self.msg.motor_cmd[jid].kd = kd
                     self.msg.motor_cmd[jid].q = float(self.msg.motor_cmd[jid].q)
 
                 self.msg.crc = self.crc.Crc(self.msg)
@@ -742,37 +904,10 @@ class G1CollisionAvoidanceNode(Node):
                     self.lowcmd_publisher.Write(self.msg)
                 return
 
-            for jid in G1_29_JointArmIndex:
-                self.msg.mode_machine = self.get_mode_machine() 
-                self.msg.motor_cmd[jid].mode = 1
-                if jid.value in wrist_vals:
-                    self.msg.motor_cmd[jid].kp = self.kp_wrist
-                    self.msg.motor_cmd[jid].kd = self.kd_wrist
-                else:
-                    self.msg.motor_cmd[jid].kp = self.kp_low
-                    self.msg.motor_cmd[jid].kd = self.kd_low
-
-                self.msg.motor_cmd[jid].q = float(self.q[7 + jid.value])
-
-            for wid in G1_29_JointWaistIndex:
-                self.msg.motor_cmd[wid].mode = 1
-                self.msg.motor_cmd[wid].kp = self.kp_low 
-                self.msg.motor_cmd[wid].kd = self.kd_low
-                self.msg.motor_cmd[wid].dq = 0.0
-                self.msg.motor_cmd[wid].tau = 0.0
-
-                self.msg.motor_cmd[wid].q = float(self.q[7 + wid.value])
-
-            try:
-                self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0
-            except Exception:
-                pass
-
-            self.msg.mode_pr = 1
-            self.msg.crc = self.crc.Crc(self.msg)
-
-            if self.send_cmds_to_robot:
-                self.lowcmd_publisher.Write(self.msg)
+            self._apply_upper_body_cmds(self.q[7:])
+            if self.use_whole_body:
+                self._apply_leg_cmds(self.q[7:])
+            self._publish_lowcmd()
 
             # publish self-collision debugging
             if self.enable_collision_avoidance:

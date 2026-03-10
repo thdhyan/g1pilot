@@ -23,6 +23,9 @@ def generate_launch_description():
     box_pose_topic = LaunchConfiguration("box_pose_topic")
     send_cmds_to_robot = LaunchConfiguration("send_cmds_to_robot")
     publish_joint_states_opensot = LaunchConfiguration("publish_joint_states_opensot")
+    use_whole_body = LaunchConfiguration("use_whole_body")
+    right_hand_frame_ref = LaunchConfiguration("right_hand_frame_ref")
+    left_hand_frame_ref = LaunchConfiguration("left_hand_frame_ref")
 
     return LaunchDescription([
         DeclareLaunchArgument("interface", default_value=EnvironmentVariable("G1_INTERFACE")),
@@ -38,6 +41,9 @@ def generate_launch_description():
         DeclareLaunchArgument("box_pose_topic", default_value="/g1pilot/box_pose"),
         DeclareLaunchArgument("send_cmds_to_robot", default_value="true"),
         DeclareLaunchArgument("publish_joint_states_opensot", default_value="false"),
+        DeclareLaunchArgument("use_whole_body", default_value="false"),
+        DeclareLaunchArgument("right_hand_frame_ref", default_value="pelvis"),
+        DeclareLaunchArgument("left_hand_frame_ref", default_value="pelvis"),
 
         Node(
             package='g1pilot',
@@ -51,6 +57,9 @@ def generate_launch_description():
                 'box_pose_topic': box_pose_topic,
                 'send_cmds_to_robot': ParameterValue(send_cmds_to_robot, value_type=bool),
                 'publish_joint_states_opensot': ParameterValue(publish_joint_states_opensot, value_type=bool),
+                'use_whole_body': ParameterValue(use_whole_body, value_type=bool),
+                'right_hand_frame_ref': right_hand_frame_ref,
+                'left_hand_frame_ref': left_hand_frame_ref,
             }],
             output='screen'
         ),

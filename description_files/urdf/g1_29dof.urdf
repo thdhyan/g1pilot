@@ -174,7 +174,9 @@
     <parent link="left_hip_yaw_link"/>
     <child link="left_knee_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.087267" upper="2.8798" effort="139" velocity="20"/>
+    <!-- <limit lower="-0.087267" upper="2.8798" effort="139" velocity="20"/> -->
+    <limit lower="0.0" upper="2.1" effort="139" velocity="20"/> 
+
   </joint>
   <link name="left_ankle_pitch_link">
     <inertial>
@@ -422,7 +424,7 @@
     <parent link="right_hip_yaw_link"/>
     <child link="right_knee_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.087267" upper="2.8798" effort="139" velocity="20"/>
+    <limit lower="0.0" upper="2.1" effort="139" velocity="20"/>
   </joint>
   <link name="right_ankle_pitch_link">
     <inertial>
@@ -578,7 +580,9 @@
     <parent link="pelvis"/>
     <child link="waist_yaw_link"/>
     <axis xyz="0 0 1"/>
-    <limit lower="-2.618" upper="2.618" effort="88" velocity="32"/>
+    <!-- <limit lower="-2.618" upper="2.618" effort="88" velocity="32"/> -->
+    <limit lower="-1.5" upper="1.5" effort="88" velocity="32"/>
+
   </joint>
   <link name="waist_roll_link">
     <inertial>
@@ -608,7 +612,11 @@
     <parent link="waist_yaw_link"/>
     <child link="waist_roll_link"/>
     <axis xyz="1 0 0"/>
-    <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
+    <!-- <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/> -->
+    <limit lower="-0.42" upper="0.42" effort="50" velocity="37"/>
+
+    <!-- JBM: lowered the waist roll joint limit to -0.42 rad to prevent self-collision between the torso and the pelvis. The original limit was -0.52 rad, which allowed for a larger range of motion but caused the torso to collide with the pelvis when the robot bent forward too much. -->
+
   </joint>
   <link name="torso_link">
     <inertial>
@@ -638,7 +646,9 @@
     <parent link="waist_roll_link"/>
     <child link="torso_link"/>
     <axis xyz="0 1 0"/>
-    <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/>
+    <limit lower="-0.42" upper="0.42" effort="50" velocity="37"/>
+    <!-- JBM: lowered the waist pitch joint limit to -0.42 rad to prevent self-collision between the torso and the pelvis. The original limit was -0.52 rad, which allowed for a larger range of motion but caused the torso to collide with the pelvis when the robot bent forward too much. -->
+    <!-- <limit lower="-0.52" upper="0.52" effort="50" velocity="37"/> -->
   </joint>
 
   <!-- LOGO -->

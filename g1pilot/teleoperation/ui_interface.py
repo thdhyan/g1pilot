@@ -22,8 +22,8 @@ class StreamDeck(Node):
         self.pub_start_balancing = self.create_publisher(Bool, '/g1pilot/start_balancing', 10)
         self.pub_arms_enabled = self.create_publisher(Bool, '/g1pilot/arms/enabled', 10)
         self.pub_arms_home = self.create_publisher(Bool, '/g1pilot/arms/home', 10)
-        self.pub_left_hand = self.create_publisher(PointStamped, '/left_hand/dx3/action', 10)
-        self.pub_right_hand = self.create_publisher(PointStamped, '/right_hand/dx3/action', 10)
+        self.pub_left_hand = self.create_publisher(PointStamped, '/g1pilot/left_hand/dx3/action', 10)
+        self.pub_right_hand = self.create_publisher(PointStamped, '/g1pilot/right_hand/dx3/action', 10)
         self.pub_emergency_stop = self.create_publisher(Bool, '/g1pilot/emergency_stop', 10)
         self.start_opensot_pub = self.create_publisher(Bool, '/g1pilot/start_opensot', 10)
 

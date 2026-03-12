@@ -26,7 +26,7 @@ from scipy.spatial.transform import Rotation as R
 
 import pyopensot as pysot
 from pyopensot.tasks.velocity import Postural, Cartesian, CoM
-from pyopensot.constraints.velocity import JointLimits, VelocityLimits
+from pyopensot.constraints.velocity import JointLimits, VelocityLimits,CartesianPositionConstraint
 from pyopensot_collision.constraints.velocity import CollisionAvoidance
 
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
@@ -134,17 +134,17 @@ COLLISION_PAIRS = {
 }
 
 q_init = [
-        -0.1,
+    -0.5,
     0.0,
     0.0,  # hips
-    0.432,  # knee
-    -0.317,
+    1.0,  # knee
+    -0.5,
     0.0,  # ankles
-    -0.1,
+    -0.5,
     0.0,
     0.0,  # hips
-    0.432,  # knee
-    -0.317,
+    1.0,  # knee
+    -0.5,
     0.0,  # ankles
     0.0,
     0.0,
@@ -598,7 +598,7 @@ class G1CollisionAvoidanceNode(Node):
         self.model = xbi.ModelInterface2(self.urdf)
         
         self.q = np.zeros(self.model.nq)
-        self.q[2] = 0.6756
+        self.q[2] = 0.55
         self.q[6] = 1.0
         # if self.use_whole_body and self.use_robot and hasattr(self, 'all_motor_q') and self.all_motor_q is not None:
         #     # Initialize from actual robot state so the solver doesn't
@@ -617,7 +617,7 @@ class G1CollisionAvoidanceNode(Node):
         self.com = CoM(self.model)
         # Offset CoM reference slightly backward (negative X) for stability
         com_ref_init, _ = self.com.getReference()
-        com_ref_init[0] -= 0.025  # 2.5 cm backward
+        com_ref_init[0] -= 0.01  # 2.5 cm backward
         self.com.setReference(com_ref_init)
 
         self.get_logger().warning("Initializing OpenSoT Tasks and Constraints")
@@ -695,23 +695,24 @@ class G1CollisionAvoidanceNode(Node):
             self.right_foot = Cartesian("right_foot_task", self.model, "right_ankle_roll_link", "world")
             # No setLambda on foot tasks: used as hard constraints via <<
 
-            # CoM XY only: keeps lateral balance but allows squatting (Z free)
-
-            # Pelvis orientation only (roll, pitch, yaw): keeps torso upright
-            # while still allowing vertical translation (squatting)
-
-            # Torso roll + pitch only (yaw free): keeps torso reasonably upright
-            # at lower priority than the hands
+            # Pelvis height upper bound: prevent pelvis from rising above starting Z
+            torso_pos = self.torso.getActualPose()[:3, 3]
+            A_torso = np.array([[0.0, 0.0, 1.0]])   # 1x3: select Z
+            b_torso = np.array([torso_pos[2]-0.01])       # upper bound = current Z
+            self.pelvis_height_constraint = CartesianPositionConstraint(
+                self.torso, A_torso, b_torso, 1.0)
+            self.get_logger().info(f"Constraint: Torso height <= {torso_pos[2]:.4f} m")
 
             if self.enable_collision_avoidance:
                 self.stack = (
-                    self.com % [0, 1] 
-                    / (self.right_gripper + self.left_gripper  + 0.01 * self.pelvis%[2])
-                    / (self.torso%[3,4] + self.pelvis%[0,1,3,4,5])
+                    self.com % [0, 1]
+                    / (self.right_gripper + self.left_gripper  )
+                    / (self.torso%[3,4] + self.pelvis%[0,1,3,4,5] +  0.1 * self.pelvis%[2])
                     / self.postural
                     << self.qlims
                     << self.dqlims
                     << self.collision_avoidance_constraint
+                    << self.pelvis_height_constraint
                     << (self.left_foot + self.right_foot)
                 )
             else:
@@ -721,6 +722,7 @@ class G1CollisionAvoidanceNode(Node):
                     / self.postural
                     << self.qlims
                     << self.dqlims
+                    << self.pelvis_height_constraint
                     << (self.left_foot + self.right_foot)
                 )
         elif self.enable_collision_avoidance:

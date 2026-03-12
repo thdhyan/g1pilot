@@ -172,7 +172,7 @@ RUN git clone https://github.com/deepmind/mujoco.git && \
 
 # OpenSoT
 RUN apt-get update && apt-get install -y ros-jazzy-moveit-msgs ros-jazzy-moveit-core && rm -rf /var/lib/apt/lists/*
-RUN git clone -b 4.0-devel_ros2 https://github.com/ADVRHumanoids/OpenSoT.git && \
+RUN git clone -b 5.0_devel https://github.com/hucebot/OpenSoT.git  && \
     cd OpenSoT && \
     mkdir -p build && \
     cd build && \

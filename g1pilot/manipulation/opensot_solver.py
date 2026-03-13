@@ -403,14 +403,14 @@ class G1CollisionAvoidanceNode(Node):
             self.lowcmd_publisher.Write(self.msg)
 
     def right_hand_pose_ref_callback(self, msg: PoseStamped):
-        if msg.frame_id != self.right_hand_frame_ref:
-            self.get_logger().error(f"Received right hand pose ref in frame '{msg.frame_id}', but expected '{self.right_hand_frame_ref}'")
+        if msg.header.frame_id != self.right_hand_frame_ref:
+            self.get_logger().error(f"Received right hand pose ref in frame '{msg.header.frame_id}', but expected '{self.right_hand_frame_ref}'")
         else:
             self.right_hand_pose_ref = msg
 
     def left_hand_pose_ref_callback(self, msg: PoseStamped):
-        if msg.frame_id != self.left_hand_frame_ref:
-            self.get_logger().error(f"Received left hand pose ref in frame '{msg.frame_id}', but expected '{self.left_hand_frame_ref}'")
+        if msg.header.frame_id != self.left_hand_frame_ref:
+            self.get_logger().error(f"Received left hand pose ref in frame '{msg.header.frame_id}', but expected '{self.left_hand_frame_ref}'")
         else:
             self.left_hand_pose_ref = msg
 

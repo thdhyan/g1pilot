@@ -921,7 +921,11 @@ class G1CollisionAvoidanceNode(Node):
             self._apply_upper_body_cmds(self.q[7:])
             if self.use_whole_body:
                 self._apply_leg_cmds(self.q[7:])
-            self._publish_lowcmd()
+            
+            if self.dq is not None:
+                self._publish_lowcmd()
+            else:
+                self.logger.error("Skipping LowCmd publish due to invalid solver output (dq=None)")
 
             # publish self-collision debugging
             if self.enable_collision_avoidance:

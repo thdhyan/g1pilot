@@ -26,6 +26,8 @@ class DX3Controller(Node):
         super().__init__('dx3_hand_controller')
         self.declare_parameter("interface", "")
         self.declare_parameter("arm_controlled", "both")
+        self.declare_parameter("grasp_kp", 0.9)
+        self.declare_parameter("grasp_kd", 0.2)
         interface = self.get_parameter("interface").get_parameter_value().string_value
         arm_controlled = self.get_parameter("arm_controlled").get_parameter_value().string_value
         self.left_gripper_state_publisher = self.create_publisher(MotorStateList, 'g1pilot/dx3/left/motor_state', QoSProfile(depth=10))
@@ -115,14 +117,16 @@ class DX3Controller(Node):
         self.get_logger().debug(f'Right hand positions: {positions}')
 
     def create_cmd(self, values):
+        kp = self.get_parameter("grasp_kp").get_parameter_value().double_value
+        kd = self.get_parameter("grasp_kd").get_parameter_value().double_value
         cmd = unitree_hg_msg_dds__HandCmd_()
         for i in range(self.total_motors):
             cmd.motor_cmd[i].mode = 0
             cmd.motor_cmd[i].q = values[i]
             cmd.motor_cmd[i].dq = 0.0
             cmd.motor_cmd[i].tau = 0.0
-            cmd.motor_cmd[i].kp = 1.5
-            cmd.motor_cmd[i].kd = 0.2
+            cmd.motor_cmd[i].kp = kp
+            cmd.motor_cmd[i].kd = kd
         return cmd
 
     def publish_commands(self):

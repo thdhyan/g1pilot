@@ -403,10 +403,16 @@ class G1CollisionAvoidanceNode(Node):
             self.lowcmd_publisher.Write(self.msg)
 
     def right_hand_pose_ref_callback(self, msg: PoseStamped):
-        self.right_hand_pose_ref = msg
+        if msg.header.frame_id != self.right_hand_frame_ref:
+            self.get_logger().error(f"Received right hand pose ref in frame '{msg.header.frame_id}', but expected '{self.right_hand_frame_ref}'")
+        else:
+            self.right_hand_pose_ref = msg
 
     def left_hand_pose_ref_callback(self, msg: PoseStamped):
-        self.left_hand_pose_ref = msg
+        if msg.header.frame_id != self.left_hand_frame_ref:
+            self.get_logger().error(f"Received left hand pose ref in frame '{msg.header.frame_id}', but expected '{self.left_hand_frame_ref}'")
+        else:
+            self.left_hand_pose_ref = msg
 
     def start_opensot_callback(self, msg: Bool):
         self.start_opensot = bool(msg.data)
@@ -794,13 +800,16 @@ class G1CollisionAvoidanceNode(Node):
                 T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
                 self.right_gripper.setReference(T)
             elif self.right_hand_pose_ref is not None:
-                ps = self.right_hand_pose_ref
-                T = pyaffine3.Affine3()
-                T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                self.right_gripper.setReference(T)
+                if self.right_hand_pose_ref.header.frame_id != self.right_hand_frame_ref:
+                    self.get_logger().error(f"Right hand pose ref frame mismatch: got '{self.right_hand_pose_ref.header.frame_id}', expected '{self.right_hand_frame_ref}'")
+                else:
+                    ps = self.right_hand_pose_ref
+                    T = pyaffine3.Affine3()
+                    T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
+                    T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
+                    self.right_gripper.setReference(T)
 
-            # left hand
+                # left hand
             use_marker_left = self.marker_enabled.get("left_hand_marker", False) and "left_hand_marker" in self.marker_poses
             if use_marker_left:
                 ps = self.marker_poses["left_hand_marker"]
@@ -809,11 +818,14 @@ class G1CollisionAvoidanceNode(Node):
                 T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
                 self.left_gripper.setReference(T)
             elif self.left_hand_pose_ref is not None:
-                ps = self.left_hand_pose_ref
-                T = pyaffine3.Affine3()
-                T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                self.left_gripper.setReference(T)
+                if self.left_hand_pose_ref.header.frame_id != self.left_hand_frame_ref:
+                    self.get_logger().error(f"Left hand pose ref frame mismatch: got '{self.left_hand_pose_ref.header.frame_id}', expected '{self.left_hand_frame_ref}'")
+                else:
+                    ps = self.left_hand_pose_ref
+                    T = pyaffine3.Affine3()
+                    T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
+                    T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
+                    self.left_gripper.setReference(T)
 
             # external box collision avoidance
             if self.enable_external_collision_avoidance and self.box_pose is not None:
@@ -909,7 +921,11 @@ class G1CollisionAvoidanceNode(Node):
             self._apply_upper_body_cmds(self.q[7:])
             if self.use_whole_body:
                 self._apply_leg_cmds(self.q[7:])
-            self._publish_lowcmd()
+            
+            if self.dq is not None:
+                self._publish_lowcmd()
+            else:
+                self.logger.error("Skipping LowCmd publish due to invalid solver output (dq=None)")
 
             # publish self-collision debugging
             if self.enable_collision_avoidance:

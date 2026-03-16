@@ -26,7 +26,7 @@ class DX3Controller(Node):
         super().__init__('dx3_hand_controller')
         self.declare_parameter("interface", "")
         self.declare_parameter("arm_controlled", "both")
-        self.declare_parameter("grasp_kp", 0.5)
+        self.declare_parameter("grasp_kp", 0.9)
         self.declare_parameter("grasp_kd", 0.2)
         interface = self.get_parameter("interface").get_parameter_value().string_value
         arm_controlled = self.get_parameter("arm_controlled").get_parameter_value().string_value

@@ -604,15 +604,16 @@ class G1CollisionAvoidanceNode(Node):
         self.model = xbi.ModelInterface2(self.urdf)
         
         self.q = np.zeros(self.model.nq)
-        self.q[2] = 0.55
-        self.q[6] = 1.0
-        # if self.use_whole_body and self.use_robot and hasattr(self, 'all_motor_q') and self.all_motor_q is not None:
-        #     # Initialize from actual robot state so the solver doesn't
-        #     # immediately command the legs away from their current position
-        #     self.q[7:] = self.all_motor_q[:29].copy()
-        # else:
-        #     self.q[7:] = q_init[0:].copy()
+        self.q[6] = 1.0  # quaternion w
         self.q[7:] = q_init[0:].copy()
+
+        # Compute pelvis height so feet rest on the ground (z=0):
+        # run FK with pelvis at z=0, then offset pelvis by the negative foot z.
+        self.model.setJointPosition(self.q)
+        self.model.update()
+        left_foot_z = self.model.getPose("left_foot_point_contact").translation[2]
+        right_foot_z = self.model.getPose("right_foot_point_contact").translation[2]
+        self.q[2] = -min(left_foot_z, right_foot_z)
 
         self.dq = np.zeros(self.model.nv)
 
@@ -921,11 +922,7 @@ class G1CollisionAvoidanceNode(Node):
             self._apply_upper_body_cmds(self.q[7:])
             if self.use_whole_body:
                 self._apply_leg_cmds(self.q[7:])
-            
-            if self.dq is not None:
-                self._publish_lowcmd()
-            else:
-                self.logger.error("Skipping LowCmd publish due to invalid solver output (dq=None)")
+            self._publish_lowcmd()
 
             # publish self-collision debugging
             if self.enable_collision_avoidance:

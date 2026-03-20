@@ -866,19 +866,20 @@ class G1CollisionAvoidanceNode(Node):
 
         
 
-            t = TransformStamped()
-            t.header.frame_id = "world"
-            t.child_frame_id = "pelvis"
-            t.header.stamp = self.get_clock().now().to_msg()
-            t.transform.translation.x = self.q[0]
-            t.transform.translation.y = self.q[1]
-            t.transform.translation.z = self.q[2]
-            t.transform.rotation.x = self.q[3]
-            t.transform.rotation.y = self.q[4]
-            t.transform.rotation.z = self.q[5]
-            t.transform.rotation.w = self.q[6]
+            if not self.use_robot:
+                t = TransformStamped()
+                t.header.frame_id = "world"
+                t.child_frame_id = "pelvis"
+                t.header.stamp = self.get_clock().now().to_msg()
+                t.transform.translation.x = self.q[0]
+                t.transform.translation.y = self.q[1]
+                t.transform.translation.z = self.q[2]
+                t.transform.rotation.x = self.q[3]
+                t.transform.rotation.y = self.q[4]
+                t.transform.rotation.z = self.q[5]
+                t.transform.rotation.w = self.q[6]
 
-            self.base_link_broadcaster.sendTransform(t)
+                self.base_link_broadcaster.sendTransform(t)
 
 
             js = JointState()

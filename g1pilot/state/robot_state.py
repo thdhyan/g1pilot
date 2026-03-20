@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+import os
+import numpy as np
+import pinocchio as pin
+
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import QoSProfile
+from ament_index_python.packages import get_package_share_directory
 
 from sensor_msgs.msg import JointState, Imu
 from std_msgs.msg import Header
@@ -105,6 +110,25 @@ class RobotState(Node):
         self.joint_state_msg = JointState()
         self.joint_state_msg.name = self.joint_names
 
+        # Load pinocchio model for FK (world -> pelvis from left foot contact)
+        urdf_path = os.path.join(
+            get_package_share_directory('g1pilot'),
+            'description_files/urdf/g1_29dof.urdf'
+        )
+        self.pin_model = pin.buildModelFromUrdf(urdf_path, pin.JointModelFreeFlyer())
+        self.pin_data = self.pin_model.createData()
+        self.left_foot_frame_id = self.pin_model.getFrameId('left_foot_point_contact')
+
+        # Map ROS joint names to pinocchio q indices (offset by 7 for floating base)
+        self._ros_to_pin_q_idx = {}
+        for ros_name in self.joint_names:
+            if self.pin_model.existJointName(ros_name):
+                jid = self.pin_model.getJointId(ros_name)
+                qi = self.pin_model.joints[jid].idx_q
+                self._ros_to_pin_q_idx[ros_name] = qi
+
+        self._q_pin = pin.neutral(self.pin_model)
+
         if self.use_robot:
             ChannelFactoryInitialize(0, interface)
             self.subscriber_low_state = ChannelSubscriber("rt/lowstate", LowState_)
@@ -159,11 +183,40 @@ class RobotState(Node):
 
         self.motor_state_pub.publish(motor_list_msg)
 
+        # FK: compute world -> pelvis assuming left foot fixed in world frame
+        self._broadcast_world_pelvis_tf(now, self._compute_world_T_pelvis(positions))
+
         # print("PUBLISH joint states:", self.publish_joint_states)
         if self.publish_joint_states:
             self.joint_state_msg.header.stamp = now
             self.joint_state_msg.position = positions
             self.joint_pub.publish(self.joint_state_msg)
+
+    def _compute_world_T_pelvis(self, positions):
+        """Compute world->pelvis transform via FK assuming left foot fixed at world origin."""
+        for i, name in enumerate(self.joint_names):
+            if name in self._ros_to_pin_q_idx:
+                self._q_pin[self._ros_to_pin_q_idx[name]] = positions[i]
+        self._q_pin[:7] = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0])
+        pin.forwardKinematics(self.pin_model, self.pin_data, self._q_pin)
+        pin.updateFramePlacements(self.pin_model, self.pin_data)
+        return self.pin_data.oMf[self.left_foot_frame_id].inverse()
+
+    def _broadcast_world_pelvis_tf(self, now, world_T_pelvis):
+        tf_msg = TransformStamped()
+        tf_msg.header.stamp = now
+        tf_msg.header.frame_id = 'world'
+        tf_msg.child_frame_id = 'pelvis'
+        p = world_T_pelvis.translation
+        tf_msg.transform.translation.x = float(p[0])
+        tf_msg.transform.translation.y = float(p[1])
+        tf_msg.transform.translation.z = float(p[2])
+        q = pin.Quaternion(world_T_pelvis.rotation)
+        tf_msg.transform.rotation.x = float(q.x)
+        tf_msg.transform.rotation.y = float(q.y)
+        tf_msg.transform.rotation.z = float(q.z)
+        tf_msg.transform.rotation.w = float(q.w)
+        self.tf_broadcaster.sendTransform(tf_msg)
 
     def _sim_tick(self):
         now = self.get_clock().now().to_msg()
@@ -173,11 +226,14 @@ class RobotState(Node):
         imu_msg.orientation.w = 1.0
         self.imu_pub.publish(imu_msg)
 
+        positions = [0.0] * len(self.joint_names)
+        self._broadcast_world_pelvis_tf(now, self._compute_world_T_pelvis(positions))
+
         if self.publish_joint_states:
             js = JointState()
             js.header.stamp = now
             js.name = self.joint_names
-            js.position = [0.0] * len(js.name)
+            js.position = positions
             self.joint_pub.publish(js)
 
 

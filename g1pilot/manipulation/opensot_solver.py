@@ -16,6 +16,7 @@ from rcl_interfaces.srv import GetParameters
 
 from geometry_msgs.msg import PoseStamped, TransformStamped, WrenchStamped,Point
 from std_msgs.msg import Bool, Float64
+from std_srvs.srv import Trigger
 from sensor_msgs.msg import JointState
 
 from visualization_msgs.msg import InteractiveMarkerControl, InteractiveMarker, Marker
@@ -212,6 +213,9 @@ class G1CollisionAvoidanceNode(Node):
 
         self.box_pose = None
 
+        self._resetting = False
+        self._last_hand_ref_time = 0.0  # monotonic time of last hand ref msg
+
 
 
         self.client = self.create_client(GetParameters, "/robot_state_publisher/get_parameters")
@@ -240,6 +244,8 @@ class G1CollisionAvoidanceNode(Node):
         self.left_hand_subscriber = self.create_subscription(
             PoseStamped, "/g1pilot/left_hand/pose_ref", self.left_hand_pose_ref_callback, 10
         )
+
+        self.reset_service = self.create_service(Trigger, "/g1pilot/reset", self.reset_callback)
 
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().warn("Service /robot_state_publisher/get_parameters not available, waiting...")
@@ -403,16 +409,66 @@ class G1CollisionAvoidanceNode(Node):
             self.lowcmd_publisher.Write(self.msg)
 
     def right_hand_pose_ref_callback(self, msg: PoseStamped):
+        self._last_hand_ref_time = time.monotonic()
+        if self._resetting:
+            return
         if msg.header.frame_id != self.right_hand_frame_ref:
             self.get_logger().error(f"Received right hand pose ref in frame '{msg.header.frame_id}', but expected '{self.right_hand_frame_ref}'")
         else:
             self.right_hand_pose_ref = msg
 
     def left_hand_pose_ref_callback(self, msg: PoseStamped):
+        self._last_hand_ref_time = time.monotonic()
+        if self._resetting:
+            return
         if msg.header.frame_id != self.left_hand_frame_ref:
             self.get_logger().error(f"Received left hand pose ref in frame '{msg.header.frame_id}', but expected '{self.left_hand_frame_ref}'")
         else:
             self.left_hand_pose_ref = msg
+
+    def reset_callback(self, request, response):
+        """Service callback for /g1pilot/reset. Waits 1s for no hand commands, then re-initializes."""
+        if self._resetting:
+            response.success = False
+            response.message = "Reset already in progress"
+            return response
+
+        self._resetting = True
+        self.get_logger().info("[Reset] Requested. Waiting 1s for hand references to stop...")
+
+        # Wait 1 second, then check if any hand ref arrived during that window
+        time.sleep(1.0)
+
+        elapsed_since_last = time.monotonic() - self._last_hand_ref_time
+        if elapsed_since_last < 1.0:
+            self._resetting = False
+            response.success = False
+            response.message = "Hand reference received during the last 1s, aborting reset"
+            self.get_logger().warn("[Reset] Aborted: hand reference received recently")
+            return response
+
+        self.get_logger().info("[Reset] No hand references for 1s. Re-initializing...")
+
+        # Clear hand references
+        self.right_hand_pose_ref = None
+        self.left_hand_pose_ref = None
+
+        # Re-run initialization
+        self.initialize()
+        self.initialize_imarkers()
+
+        # Reset whole-body init state so it can be triggered again
+        self._wb_init_active = False
+        self._wb_init_done = False
+        self._wb_q_start = None
+        self._wb_init_start_time = None
+
+        self._resetting = False
+        self.get_logger().info("[Reset] Initialization complete")
+
+        response.success = True
+        response.message = "Reset and re-initialization complete"
+        return response
 
     def start_opensot_callback(self, msg: Bool):
         self.start_opensot = bool(msg.data)
@@ -766,6 +822,9 @@ class G1CollisionAvoidanceNode(Node):
     # Control loop
     # ----------------------------
     def control_loop(self):
+        if self._resetting:
+            return
+
         # Whole-body gradual init: triggered by start_opensot, interpolates to q_init first
         if self.use_whole_body and self.start_opensot and not self._wb_init_done:
             if not self._wb_init_active:

@@ -663,13 +663,30 @@ class G1CollisionAvoidanceNode(Node):
         self.q[6] = 1.0  # quaternion w
         self.q[7:] = q_init[0:].copy()
 
-        # Compute pelvis height so feet rest on the ground (z=0):
-        # run FK with pelvis at z=0, then offset pelvis by the negative foot z.
+        # Compute world -> pelvis so that feet rest on the ground.
+        # With pelvis at origin, run FK to find the left foot pose,
+        # then invert it to get the pelvis pose in a frame where the left foot is at the origin.
         self.model.setJointPosition(self.q)
         self.model.update()
-        left_foot_z = self.model.getPose("left_foot_point_contact").translation[2]
-        right_foot_z = self.model.getPose("right_foot_point_contact").translation[2]
-        self.q[2] = -min(left_foot_z, right_foot_z)
+        if self.use_robot:
+            # Match robot_state convention: world origin = left foot contact
+            # Inverse of affine T=(R,t) is (R^T, -R^T @ t)
+            left_foot_pose = self.model.getPose("left_foot_point_contact")
+            R_inv = left_foot_pose.linear.T
+            t_inv = -R_inv @ left_foot_pose.translation
+            quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
+            self.q[0] = t_inv[0]
+            self.q[1] = t_inv[1]
+            self.q[2] = t_inv[2]
+            self.q[3] = quat[0]
+            self.q[4] = quat[1]
+            self.q[5] = quat[2]
+            self.q[6] = quat[3]
+        # else:
+        #     # Simulation: pelvis centered at x=0, y=0, only z adjusted
+        #     left_foot_z = self.model.getPose("left_foot_point_contact").translation[2]
+        #     right_foot_z = self.model.getPose("right_foot_point_contact").translation[2]
+        #     self.q[2] = -min(left_foot_z, right_foot_z)
 
         self.dq = np.zeros(self.model.nv)
 

@@ -41,6 +41,7 @@ def generate_launch_description():
             launch_arguments={
                 'interface': interface,
                 'publish_joint_states': 'false',
+                'use_robot': 'false',
             }.items(),
         ),
         IncludeLaunchDescription(

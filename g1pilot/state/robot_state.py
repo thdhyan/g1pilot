@@ -227,7 +227,6 @@ class RobotState(Node):
         self.imu_pub.publish(imu_msg)
 
         positions = [0.0] * len(self.joint_names)
-        self._broadcast_world_pelvis_tf(now, self._compute_world_T_pelvis(positions))
 
         if self.publish_joint_states:
             js = JointState()

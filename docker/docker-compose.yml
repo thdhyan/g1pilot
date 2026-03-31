@@ -4,7 +4,7 @@
 
 services:
   g1pilot:
-    image: registry.gitlab.com/bleurobotics/code/bleu_integration/g1pilot-from-bleu-base:demo-v0.1.0
+    image: registry.gitlab.com/bleurobotics/containers/g1pilot/g1pilot-from-bleu-base:demo-v0.1.0
     container_name: g1pilot
     stdin_open: true
     tty: true

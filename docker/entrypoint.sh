@@ -5,6 +5,13 @@ if [ -z "$G1_INTERFACE" ]; then
     echo "Set it to your network interface, e.g.: G1_INTERFACE=eno2"
     exit 1
 fi
+
+# Speech synthesis dependencies for g1pilot.state.say (espeak-ng + ffmpeg).
+if ! command -v espeak-ng >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
+    DEBIAN_FRONTEND=noninteractive apt-get update \
+        && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends espeak-ng ffmpeg
+fi
+
 exec bash -ic '
 cd /ros2_ws &&
 ./cbuild &&

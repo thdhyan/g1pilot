@@ -15,7 +15,7 @@ from rclpy.node import Node
 from rcl_interfaces.srv import GetParameters
 
 from geometry_msgs.msg import PoseStamped, TransformStamped, WrenchStamped,Point
-from std_msgs.msg import Bool, Float64
+from std_msgs.msg import Bool, Float64, Int8
 from std_srvs.srv import Trigger
 from sensor_msgs.msg import JointState
 
@@ -35,7 +35,9 @@ from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
 from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
 from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
+from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
 
+from g1pilot.state.say import synthesize_pcm, play_stream, play_stop, CHUNK_SIZE
 from g1pilot.utils.common import (
     MotorState,
     G1_29_JointArmIndex,
@@ -69,21 +71,21 @@ JOINT_GAINS = {
     "kWaistRoll":  (400.0, 10.0, 0.0),
     "kWaistPitch": (400.0, 10.0, 0.0),
     # Left arm
-    "kLeftShoulderPitch": (100.0, 2.0, 0.0),
-    "kLeftShoulderRoll":  (100.0, 2.0, 0.0),
-    "kLeftShoulderYaw":   (50.0,  2.0, 0.0),
-    "kLeftElbow":         (50.0,  2.0, 0.0),
-    "kLeftWristRoll":     (20.0,  1.0, 0.0),
-    "kLeftWristPitch":    (20.0,  1.0, 0.0),
-    "kLeftWristyaw":      (20.0,  1.0, 0.0),
+    "kLeftShoulderPitch": (700.0, 10.0, 0.0),
+    "kLeftShoulderRoll":  (500.0, 10.0, 0.0),
+    "kLeftShoulderYaw":   (250.0,  5.0, 0.0),
+    "kLeftElbow":         (150.0,  5.0, 0.0),
+    "kLeftWristRoll":     (100.0,  2.0, 0.0),
+    "kLeftWristPitch":    (100.0,  2.0, 0.0),
+    "kLeftWristyaw":      (100.0,  2.0, 0.0),
     # Right arm
-    "kRightShoulderPitch": (100.0, 2.0, 0.0),
-    "kRightShoulderRoll":  (100.0, 2.0, 0.0),
-    "kRightShoulderYaw":   (50.0,  2.0, 0.0),
-    "kRightElbow":         (50.0,  2.0, 0.0),
-    "kRightWristRoll":     (20.0,  1.0, 0.0),
-    "kRightWristPitch":    (20.0,  1.0, 0.0),
-    "kRightWristYaw":      (20.0,  1.0, 0.0),
+    "kRightShoulderPitch": (700.0, 10.0, 0.0),
+    "kRightShoulderRoll":  (500.0, 10.0, 0.0),
+    "kRightShoulderYaw":   (250.0,  5.0, 0.0),
+    "kRightElbow":         (150.0,  5.0, 0.0),
+    "kRightWristRoll":     (100.0,  2.0, 0.0),
+    "kRightWristPitch":    (100.0,  2.0, 0.0),
+    "kRightWristYaw":      (100.0,  2.0, 0.0),
 }
 
 # Build index-based lookup: {motor_index: (kp, kd, tau)}
@@ -135,17 +137,28 @@ COLLISION_PAIRS = {
 }
 
 q_init = [
-    -0.5,
+    -0.6,
     0.0,
     0.0,  # hips
-    1.0,  # knee
-    -0.5,
+    1.2,  # knee
+    -0.6,
     0.0,  # ankles
-    -0.5,
+    -0.6,
     0.0,
     0.0,  # hips
-    1.0,  # knee
-    -0.5,
+    1.2,  # knee
+    -0.6,
+    # -0.5,
+    # 0.0,
+    # 0.0,  # hips
+    # 1.0,  # knee
+    # -0.5,
+    # 0.0,  # ankles
+    # -0.5,
+    # 0.0,
+    # 0.0,  # hips
+    # 1.0,  # knee
+    # -0.5,
     0.0,  # ankles
     0.0,
     0.0,
@@ -165,6 +178,13 @@ q_init = [
     0.0,
     0.0,
 ]  # arm
+
+
+SCAN_AMPLITUDE_RAD = np.deg2rad(20.0)
+SCAN_FREQ_HZ = 0.05
+
+LED_OPERATING = (0, 255, 0)     # green: normal teleop
+LED_SCANNING = (255, 140, 0)    # orange: scanning mode
 
 
 class Mode:
@@ -238,6 +258,7 @@ class G1CollisionAvoidanceNode(Node):
 
         self.start_opensot_sub = self.create_subscription(Bool, "/g1pilot/start_opensot", self.start_opensot_callback, 10)
         self.emergency_stop_sub = self.create_subscription(Bool, "/g1pilot/emergency_stop", self.emergency_stop_callback, 10)
+        self.scanning_mode_sub = self.create_subscription(Int8, "/g1pilot/scanning_mode", self.scanning_mode_callback, 10)
         self.righ_hand_subscriber = self.create_subscription(
             PoseStamped, "/g1pilot/right_hand/pose_ref", self.right_hand_pose_ref_callback, 10
         )
@@ -296,6 +317,14 @@ class G1CollisionAvoidanceNode(Node):
         self._wb_init_start_time = None
         self._wb_init_duration = 3.0
 
+        self.scanning_mode = 0
+        self._scan_active = False
+        self._scan_t = 0.0
+        self._scan_torso_base_pose = None
+
+        self.audio_client = None
+        self._say_thread = None
+
         # Precompute joint index sets (hardware-independent, used by motor command helpers)
         self._leg_joint_ids = [j for j in G1_29_JointIndex if j.value < 12]
 
@@ -343,6 +372,11 @@ class G1CollisionAvoidanceNode(Node):
         topic = "rt/lowcmd" if self.use_whole_body else "rt/arm_sdk"
         self.lowcmd_publisher = ChannelPublisher(topic, LowCmd_)
         self.lowcmd_publisher.Init()
+
+        self.audio_client = AudioClient()
+        self.audio_client.SetTimeout(10.0)
+        self.audio_client.Init()
+        self._set_led(*LED_OPERATING)
 
         while not self.lowstate_buffer.GetData():
             self.get_logger().info("Waiting for LowState data...")
@@ -426,44 +460,35 @@ class G1CollisionAvoidanceNode(Node):
         else:
             self.left_hand_pose_ref = msg
 
+    def _do_full_reset(self):
+        """Clear hand refs, reset OpenSoT q to q_init, recreate markers, reset WB init state."""
+        self._resetting = True
+        self.right_hand_pose_ref = None
+        self.left_hand_pose_ref = None
+        self.reset_opensot()
+        self.initialize_imarkers()
+        self._wb_init_active = False
+        self._wb_init_done = False
+        self._wb_q_start = None
+        self._wb_init_start_time = None
+        self._resetting = False
+
     def reset_callback(self, request, response):
-        """Service callback for /g1pilot/reset. Waits 1s for no hand commands, then re-initializes."""
+        """Service callback for /g1pilot/reset. Re-initializes if no hand commands are active."""
         if self._resetting:
             response.success = False
             response.message = "Reset already in progress"
             return response
 
-        self._resetting = True
-        self.get_logger().info("[Reset] Requested. Waiting 1s for hand references to stop...")
-
-        # Wait 1 second, then check if any hand ref arrived during that window
-        time.sleep(1.0)
-
         elapsed_since_last = time.monotonic() - self._last_hand_ref_time
         if elapsed_since_last < 1.0:
-            self._resetting = False
             response.success = False
-            response.message = "Hand reference received during the last 1s, aborting reset"
-            self.get_logger().warn("[Reset] Aborted: hand reference received recently")
+            response.message = "Hand references received less than 1s ago, aborting reset"
+            self.get_logger().warn("[Reset] Aborted: hand reference received %.2fs ago", elapsed_since_last)
             return response
 
-        self.get_logger().info("[Reset] No hand references for 1s. Re-initializing...")
-
-        # Clear hand references
-        self.right_hand_pose_ref = None
-        self.left_hand_pose_ref = None
-
-        # Re-run initialization
-        self.initialize()
-        self.initialize_imarkers()
-
-        # Reset whole-body init state so it can be triggered again
-        self._wb_init_active = False
-        self._wb_init_done = False
-        self._wb_q_start = None
-        self._wb_init_start_time = None
-
-        self._resetting = False
+        self.get_logger().info("[Reset] Re-initializing...")
+        self._do_full_reset()
         self.get_logger().info("[Reset] Initialization complete")
 
         response.success = True
@@ -475,6 +500,76 @@ class G1CollisionAvoidanceNode(Node):
 
     def emergency_stop_callback(self, msg: Bool):
         self.emergency_stop = bool(msg.data)
+
+    def scanning_mode_callback(self, msg: Int8):
+        new_mode = int(msg.data)
+        if new_mode == self.scanning_mode or self._resetting:
+            return
+        self.scanning_mode = new_mode
+        if new_mode == 1:
+            self._enter_scanning()
+        else:
+            self._exit_scanning()
+
+    def _enter_scanning(self):
+        if not self.start_opensot:
+            self.get_logger().warn("[Scan] start_opensot is False; ignoring")
+            self.scanning_mode = 0
+            return
+        self._do_full_reset()
+        self._scan_torso_base_pose = self.model.getPose("torso_link")
+        self.torso.setReference(self._scan_torso_base_pose)
+        self._activate_stack(self._scan_stack)
+        self._scan_t = 0.0
+        self._scan_active = True
+        self._set_led(*LED_SCANNING)
+        self._say_async("Entering ... scanning ... mode")
+        self.get_logger().info("[Scan] Entering scanning mode")
+
+    def _set_led(self, r, g, b):
+        if self.audio_client is None:
+            return
+        try:
+            self.audio_client.LedControl(r, g, b)
+        except Exception as e:
+            self.get_logger().error(f"[Led] failed: {e}")
+
+    def _say_async(self, text):
+        """Speak text on the G1 speaker without blocking the control loop."""
+        if self.audio_client is None:
+            return
+        if self._say_thread is not None and self._say_thread.is_alive():
+            return
+        self._say_thread = threading.Thread(target=self._say_blocking, args=(text,), daemon=True)
+        self._say_thread.start()
+
+    def _say_blocking(self, text):
+        try:
+            pcm = synthesize_pcm(text)
+            if not pcm:
+                return
+            stream_id = str(int(time.time() * 1000))
+            start = time.monotonic()
+            for offset in range(0, len(pcm), CHUNK_SIZE):
+                play_stream(self.audio_client, stream_id, pcm[offset:offset + CHUNK_SIZE])
+                time.sleep(1)
+            audio_seconds = len(pcm) / 32000.0
+            remaining = audio_seconds + 0.5 - (time.monotonic() - start)
+            if remaining > 0:
+                time.sleep(remaining)
+            play_stop(self.audio_client, stream_id)
+        except Exception as e:
+            self.get_logger().error(f"[Say] failed: {e}")
+
+    def _exit_scanning(self):
+        self._scan_active = False
+        if self._scan_torso_base_pose is not None:
+            self.torso.setReference(self._scan_torso_base_pose)
+        self._do_full_reset()
+        self._activate_stack(self._teleop_stack)
+        self._set_led(*LED_OPERATING)
+        self._say_async("Exiting ... scanning ... mode, ... Returning ... to ... operation ... mode")
+        self.get_logger().info("[Scan] Exiting scanning mode")
 
     def box_pose_callback(self, msg: Marker):
         self.box_pose = msg
@@ -699,6 +794,7 @@ class G1CollisionAvoidanceNode(Node):
         com_ref_init, _ = self.com.getReference()
         com_ref_init[0] -= 0.01  # 2.5 cm backward
         self.com.setReference(com_ref_init)
+        self.com.setLambda(0.05)
 
         self.get_logger().warning("Initializing OpenSoT Tasks and Constraints")
 
@@ -708,11 +804,11 @@ class G1CollisionAvoidanceNode(Node):
 
         self.get_logger().info("Task: Torso")
         self.torso = Cartesian("torso_task", self.model, "torso_link", manipulation_frame)
-        self.torso.setLambda(0.1)
+        self.torso.setLambda(0.01)
 
         self.get_logger().info("Task: Pelvis")
         self.pelvis = Cartesian("pelvis_task", self.model, "pelvis", manipulation_frame)
-        self.pelvis.setLambda(0.1)
+        self.pelvis.setLambda(0.01)
 
         self.get_logger().info("Task: Right Gripper")
         self.right_gripper = Cartesian(
@@ -734,7 +830,7 @@ class G1CollisionAvoidanceNode(Node):
 
         self.get_logger().info("Task: Postural")
         self.postural = Postural(self.model)
-        self.postural.setLambda(0.3) # coman uses 0.01 ?
+        self.postural.setLambda(0.1) # coman uses 0.01 ?
         self.W = self.postural.getWeight().copy()
         if self.use_whole_body:
             # Zero floating base DOFs so the postural task doesn't fight
@@ -769,75 +865,159 @@ class G1CollisionAvoidanceNode(Node):
             self.collision_avoidance_constraint.setDetectionThreshold(-1)
 
         if self.use_whole_body:
-            self.get_logger().info("Task: Left Foot (contact constraint)")
-            self.left_foot = Cartesian("left_foot_task", self.model, "left_ankle_roll_link", "world")
-            self.get_logger().info("Task: Right Foot (contact constraint)")
-            self.right_foot = Cartesian("right_foot_task", self.model, "right_ankle_roll_link", "world")
-            # No setLambda on foot tasks: used as hard constraints via <<
-
-            # Pelvis height upper bound: prevent pelvis from rising above starting Z
-            torso_pos = self.torso.getActualPose()[:3, 3]
-            A_torso = np.array([[0.0, 0.0, 1.0]])   # 1x3: select Z
-            b_torso = np.array([torso_pos[2]-0.01])       # upper bound = current Z
-            self.pelvis_height_constraint = CartesianPositionConstraint(
-                self.torso, A_torso, b_torso, 1.0)
-            self.get_logger().info(f"Constraint: Torso height <= {torso_pos[2]:.4f} m")
-
-            if self.enable_collision_avoidance:
-                self.stack = (
-                    self.com % [0, 1]
-                    / (self.right_gripper + self.left_gripper  )
-                    / (self.torso%[3,4] + self.pelvis%[0,1,3,4,5] +  0.1 * self.pelvis%[2])
-                    / self.postural
-                    << self.qlims
-                    << self.dqlims
-                    << self.collision_avoidance_constraint
-                    << self.pelvis_height_constraint
-                    << (self.left_foot + self.right_foot)
-                )
-            else:
-                self.stack = (
-                    (self.com % [0, 1] + self.right_gripper + self.left_gripper)
-                    / self.torso_rp
-                    / self.postural
-                    << self.qlims
-                    << self.dqlims
-                    << self.pelvis_height_constraint
-                    << (self.left_foot + self.right_foot)
-                )
-        elif self.enable_collision_avoidance:
-            self.stack = ((
-                self.base#%[0,1,3,4,5]
-                / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
-                / self.postural)
-                << self.qlims
-                << self.dqlims
-                << self.collision_avoidance_constraint
-            )
+            self._build_whole_body_contact_tasks()
+            self._teleop_stack = self._build_stack_whole_body()
+            self._scan_stack = self._build_stack_scanning_whole_body()
         else:
-            self.stack = ((
-                self.base#%[0,1,3,4,5]
-                / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
-                / self.postural)
-                << self.qlims
-                << self.dqlims
-            )
+            self._teleop_stack = self._build_stack_arm_sdk()
+            self._scan_stack = self._build_stack_scanning_arm_sdk()
+        self._teleop_stack.update()
+        self._scan_stack.update()
+        self._teleop_solver = pysot.iHQP(self._teleop_stack, eps_regularisation=1e10)
+        self._scan_solver = pysot.iHQP(self._scan_stack, eps_regularisation=1e10)
+        self._activate_stack(self._teleop_stack)
 
-        # self.com_xy = self.com % [0, 1]
-        # self.stack = (
-        #     self.com_xy
-        #     / (self.base % [3, 4, 5] + self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
-        #     / self.postural
-        #     << self.qlims
-        #     << self.dqlims
-        # )
-            
+
+    def _build_whole_body_contact_tasks(self):
+        """Define foot Cartesian tasks and the pelvis-height constraint used in whole-body mode."""
+        self.get_logger().info("Task: Left Foot (contact constraint)")
+        self.left_foot = Cartesian("left_foot_task", self.model, "left_ankle_roll_link", "world")
+        self.get_logger().info("Task: Right Foot (contact constraint)")
+        self.right_foot = Cartesian("right_foot_task", self.model, "right_ankle_roll_link", "world")
+
+        torso_pos = self.torso.getActualPose()[:3, 3]
+        A_torso = np.array([[0.0, 0.0, 1.0]])
+        b_torso = np.array([torso_pos[2]])
+        self.pelvis_height_constraint = CartesianPositionConstraint(
+            self.torso, A_torso, b_torso, 1.0
+        )
+        self.get_logger().info(f"Constraint: Torso height <= {torso_pos[2]:.4f} m")
+
+    def _build_stack_arm_sdk(self):
+        """Stack for arm_sdk mode (legs handled externally by Unitree's controller)."""
+        stack = (
+            self.base
+            / (self.torso % [3, 4, 5] + self.right_gripper + self.left_gripper)
+            / self.postural
+        ) << self.qlims << self.dqlims
+        if self.enable_collision_avoidance:
+            stack = stack << self.collision_avoidance_constraint
+        return stack
+
+    def _build_stack_whole_body(self):
+        """Stack for whole-body mode (OpenSoT controls legs; feet pinned, CoM kept stable)."""
+        if self.enable_collision_avoidance:
+            stack = (
+                self.com % [0, 1]
+                / (self.right_gripper + self.left_gripper)
+                / (self.torso % [3, 4] + self.pelvis % [0, 1, 3, 4, 5] + 0.1 * self.pelvis % [2])
+                / self.postural
+            ) << self.qlims << self.dqlims << self.collision_avoidance_constraint
+        else:
+            stack = (
+                (self.com % [0, 1] + self.right_gripper + self.left_gripper)
+                / self.torso_rp
+                / self.postural
+            ) << self.qlims << self.dqlims
+        return stack << self.pelvis_height_constraint << (self.left_foot + self.right_foot)
+
+    def _build_stack_scanning_arm_sdk(self):
+        """Scanning stack for arm_sdk mode: torso oscillation + postural, no hand tracking."""
+        stack = (
+            self.base
+            / self.torso % [3, 4, 5]
+            / self.postural
+        ) << self.qlims << self.dqlims
+        if self.enable_collision_avoidance:
+            stack = stack << self.collision_avoidance_constraint
+        return stack
+
+    def _build_stack_scanning_whole_body(self):
+        """Scanning stack for whole-body mode: torso oscillation + balance, no hand tracking."""
+        stack = (
+            self.com % [0, 1]
+            / (self.torso % [3, 4, 5] + self.pelvis % [0, 1, 3, 4, 5] + 0.1 * self.pelvis % [2])
+            # / self.postural
+        ) << self.qlims << self.dqlims
+        if self.enable_collision_avoidance:
+            stack = stack << self.collision_avoidance_constraint
+        return stack << self.pelvis_height_constraint << (self.left_foot + self.right_foot)
+
+    def _activate_stack(self, stack):
+        """Switch the active stack/solver pair. Both solvers are pre-built in initialize()
+        so each keeps its qpOASES warm-start state across mode toggles."""
+        self.stack = stack
+        self.solver = self._scan_solver if stack is self._scan_stack else self._teleop_solver
         self.stack.update()
-        self.solver = pysot.iHQP(self.stack, eps_regularisation=1e11)
+
+    def reset_opensot(self):
+        """Reset q/dq to init pose and update the model. Tasks, stack, and solver are kept."""
+        self.get_logger().warning("Resetting OpenSoT state (q, dq)")
+
+        self.q = np.zeros(self.model.nq)
+        self.q[6] = 1.0  # quaternion w
+        self.q[7:] = q_init[0:].copy()
+
+        self.model.setJointPosition(self.q)
+        self.model.update()
+        if self.use_robot:
+            left_foot_pose = self.model.getPose("left_foot_point_contact")
+            R_inv = left_foot_pose.linear.T
+            t_inv = -R_inv @ left_foot_pose.translation
+            quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
+            self.q[0] = t_inv[0]
+            self.q[1] = t_inv[1]
+            self.q[2] = t_inv[2]
+            self.q[3] = quat[0]
+            self.q[4] = quat[1]
+            self.q[5] = quat[2]
+            self.q[6] = quat[3]
+
+        self.dq = np.zeros(self.model.nv)
+
+        self.model.setJointPosition(self.q)
+        self.model.setJointVelocity(self.dq)
+        self.model.update()
+
+        # Reset gripper task references to current FK poses so the solver
+        # doesn't drive the robot back to stale (pre-reset) targets.
+        self.right_gripper.setReference(self.model.getPose("right_hand_point_contact"))
+        self.left_gripper.setReference(self.model.getPose("left_hand_point_contact"))
 
     # ----------------------------
     # Control loop
     # ----------------------------
+    def _run_scan_step(self):
+        """Oscillate torso yaw reference about the q_init torso orientation."""
+        self._scan_t += self.control_dt
+        yaw = SCAN_AMPLITUDE_RAD * np.sin(2.0 * np.pi * SCAN_FREQ_HZ * self._scan_t)
+        Rz = R.from_euler('z', yaw).as_matrix()
+        torso_ref = pyaffine3.Affine3()
+        torso_ref.linear = Rz @ self._scan_torso_base_pose.linear
+        torso_ref.translation = self._scan_torso_base_pose.translation
+        self.torso.setReference(torso_ref)
+
+    def _apply_hand_ref(self, gripper_task, marker_name, pose_ref, frame_ref):
+        """Update gripper task reference from interactive marker or external pose_ref."""
+        if self.marker_enabled.get(marker_name, False) and marker_name in self.marker_poses:
+            ps = self.marker_poses[marker_name]
+        elif pose_ref is None:
+            return
+        elif pose_ref.header.frame_id != frame_ref:
+            self.get_logger().error(
+                f"Hand pose ref frame mismatch: got '{pose_ref.header.frame_id}', expected '{frame_ref}'"
+            )
+            return
+        else:
+            ps = pose_ref
+        T = pyaffine3.Affine3()
+        T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
+        T.linear = R.from_quat([
+            ps.pose.orientation.x, ps.pose.orientation.y,
+            ps.pose.orientation.z, ps.pose.orientation.w,
+        ]).as_matrix()
+        gripper_task.setReference(T)
+
     def control_loop(self):
         if self._resetting:
             return
@@ -868,41 +1048,17 @@ class G1CollisionAvoidanceNode(Node):
             self.model.setJointVelocity(self.dq)
             self.model.update()
 
-            # right hand
-            use_marker_right = self.marker_enabled.get("right_hand_marker", False) and "right_hand_marker" in self.marker_poses
-            if use_marker_right:
-                ps = self.marker_poses["right_hand_marker"]
-                T = pyaffine3.Affine3()
-                T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                self.right_gripper.setReference(T)
-            elif self.right_hand_pose_ref is not None:
-                if self.right_hand_pose_ref.header.frame_id != self.right_hand_frame_ref:
-                    self.get_logger().error(f"Right hand pose ref frame mismatch: got '{self.right_hand_pose_ref.header.frame_id}', expected '{self.right_hand_frame_ref}'")
-                else:
-                    ps = self.right_hand_pose_ref
-                    T = pyaffine3.Affine3()
-                    T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                    T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                    self.right_gripper.setReference(T)
-
-                # left hand
-            use_marker_left = self.marker_enabled.get("left_hand_marker", False) and "left_hand_marker" in self.marker_poses
-            if use_marker_left:
-                ps = self.marker_poses["left_hand_marker"]
-                T = pyaffine3.Affine3()
-                T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                self.left_gripper.setReference(T)
-            elif self.left_hand_pose_ref is not None:
-                if self.left_hand_pose_ref.header.frame_id != self.left_hand_frame_ref:
-                    self.get_logger().error(f"Left hand pose ref frame mismatch: got '{self.left_hand_pose_ref.header.frame_id}', expected '{self.left_hand_frame_ref}'")
-                else:
-                    ps = self.left_hand_pose_ref
-                    T = pyaffine3.Affine3()
-                    T.translation = np.array([ps.pose.position.x, ps.pose.position.y, ps.pose.position.z])
-                    T.linear = R.from_quat([ps.pose.orientation.x, ps.pose.orientation.y, ps.pose.orientation.z, ps.pose.orientation.w]).as_matrix()
-                    self.left_gripper.setReference(T)
+            if self._scan_active:
+                self._run_scan_step()
+            else:
+                self._apply_hand_ref(
+                    self.right_gripper, "right_hand_marker",
+                    self.right_hand_pose_ref, self.right_hand_frame_ref,
+                )
+                self._apply_hand_ref(
+                    self.left_gripper, "left_hand_marker",
+                    self.left_hand_pose_ref, self.left_hand_frame_ref,
+                )
 
             # external box collision avoidance
             if self.enable_external_collision_avoidance and self.box_pose is not None:

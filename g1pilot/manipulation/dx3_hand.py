@@ -5,6 +5,7 @@ import rclpy
 from rclpy.qos import QoSProfile
 from rclpy.node import Node
 from std_msgs.msg import String
+from std_srvs.srv import Trigger
 from geometry_msgs.msg import PointStamped
 from unitree_sdk2py.core.channel import ChannelPublisher, ChannelSubscriber, ChannelFactoryInitialize
 from unitree_sdk2py.idl.unitree_hg.msg.dds_ import HandCmd_, HandState_
@@ -28,8 +29,10 @@ class DX3Controller(Node):
         self.declare_parameter("arm_controlled", "both")
         self.declare_parameter("grasp_kp", 0.9)
         self.declare_parameter("grasp_kd", 0.2)
+        self.declare_parameter("use_robot", True)
         interface = self.get_parameter("interface").get_parameter_value().string_value
         arm_controlled = self.get_parameter("arm_controlled").get_parameter_value().string_value
+        self.use_robot = bool(self.get_parameter("use_robot").value)
         self.left_gripper_state_publisher = self.create_publisher(MotorStateList, 'g1pilot/dx3/left/motor_state', QoSProfile(depth=10))
         self.right_gripper_state_publisher = self.create_publisher(MotorStateList, 'g1pilot/dx3/right/motor_state', QoSProfile(depth=10))
 
@@ -40,23 +43,40 @@ class DX3Controller(Node):
         self.total_motors = 7
         self.send_commands = True
 
-        ChannelFactoryInitialize(0, interface)
+        if not self.use_robot:
+            self.get_logger().info("use_robot:=false -> Not connecting to robot (DX3 commands disabled).")
 
-        if arm_controlled in ["right", "both"]:
-            self.right_pub = ChannelPublisher("rt/dex3/right/cmd", HandCmd_)
-            self.right_pub.Init()
-            self.right_sub = ChannelSubscriber("rt/dex3/right/state", HandState_)
-            self.right_sub.Init(self.right_callback)
-            self.create_subscription(PointStamped, "/g1pilot/right_hand/dx3/action", self.right_action_callback, 10)
+        if self.use_robot:
+            ChannelFactoryInitialize(0, interface)
 
-        if arm_controlled in ["left", "both"]:
-            self.left_pub = ChannelPublisher("rt/dex3/left/cmd", HandCmd_)
-            self.left_pub.Init()
-            self.left_sub = ChannelSubscriber("rt/dex3/left/state", HandState_)
-            self.left_sub.Init(self.left_callback)
-            self.create_subscription(PointStamped, "/g1pilot/left_hand/dx3/action", self.left_action_callback, 10)
+            if arm_controlled in ["right", "both"]:
+                self.right_pub = ChannelPublisher("rt/dex3/right/cmd", HandCmd_)
+                self.right_pub.Init()
+                self.right_sub = ChannelSubscriber("rt/dex3/right/state", HandState_)
+                self.right_sub.Init(self.right_callback)
+                self.create_subscription(PointStamped, "/g1pilot/right_hand/dx3/action", self.right_action_callback, 10)
+
+            if arm_controlled in ["left", "both"]:
+                self.left_pub = ChannelPublisher("rt/dex3/left/cmd", HandCmd_)
+                self.left_pub.Init()
+                self.left_sub = ChannelSubscriber("rt/dex3/left/state", HandState_)
+                self.left_sub.Init(self.left_callback)
+                self.create_subscription(PointStamped, "/g1pilot/left_hand/dx3/action", self.left_action_callback, 10)
+
+        self.reset_service = self.create_service(Trigger, "/g1pilot/dx3/reset", self.reset_callback)
 
         self.create_timer(0.05, self.publish_commands)
+
+    def reset_callback(self, request, response):
+        if hasattr(self, "right_pub"):
+            self.right_action = "close_2"
+            self.right_target = CLOSE_RIGHT_VALUES_2
+        if hasattr(self, "left_pub"):
+            self.left_action = "close_2"
+            self.left_target = CLOSE_LEFT_VALUES_2
+        response.success = True
+        response.message = "Hands closed"
+        return response
 
     def right_action_callback(self, msg: PointStamped):
         if msg.point.x < -0.5:

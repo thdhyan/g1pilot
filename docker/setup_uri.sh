@@ -20,15 +20,27 @@ eval "$(register-python-argcomplete3 colcon)"
 
 echo "Setting up DDS"
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+
+# Use the requested interface only if it exists, is up, and has an IPv4 address.
+# Otherwise fall back to loopback so the stack runs without the robot.
+if [ -d "/sys/class/net/$1" ] \
+   && [ "$(cat /sys/class/net/$1/operstate 2>/dev/null)" = "up" ] \
+   && ip -o -4 addr show "$1" 2>/dev/null | grep -q "inet "; then
+    IFACE="$1"
+else
+    echo "WARNING: network interface '$1' is missing, down, or has no IPv4 — falling back to 'lo' (local-only, no robot)."
+    IFACE="lo"
+fi
+
 export CYCLONEDDS_URI='<CycloneDDS><Domain><General>
                         <Interfaces>
-                        <NetworkInterface name="'$1'" priority="default" multicast="default" />
+                        <NetworkInterface name="'$IFACE'" priority="default" multicast="default" />
                         </Interfaces></General></Domain></CycloneDDS>'
 
-if [ "$1" = "lo"  ]
+if [ "$IFACE" = "lo" ]
 then
     # Need to enable multicast if using localhost
-    echo "Enabling multicast"
+    echo "Enabling multicast on lo"
     ip link set lo multicast on
 fi
 

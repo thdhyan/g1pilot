@@ -34,7 +34,10 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(navigation_launcher),
-            launch_arguments=[("interface", interface)],
+            launch_arguments={
+                'interface': interface,
+                'use_robot': 'false',
+            }.items(),
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(robot_state_launcher),
@@ -52,6 +55,7 @@ def generate_launch_description():
             PythonLaunchDescriptionSource(manipulation_launcher),
             launch_arguments={
                 'interface': interface,
+                'use_robot': 'false',
                 'enable_collision_avoidance': LaunchConfiguration('enable_collision_avoidance'),
                 'enable_external_collision_avoidance': LaunchConfiguration('enable_external_collision_avoidance'),
                 'box_pose_topic': LaunchConfiguration('box_pose_topic'),

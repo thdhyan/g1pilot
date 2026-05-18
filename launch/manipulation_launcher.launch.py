@@ -70,7 +70,8 @@ def generate_launch_description():
             name='dx3_controller',
             parameters=[{
                 'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
-                'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str)
+                'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str),
+                'use_robot': ParameterValue(use_robot, value_type=bool),
             }],
             output='screen'
         ),

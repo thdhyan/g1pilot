@@ -1,4 +1,4 @@
-FROM registry.gitlab.com/bleurobotics/code/bleu_integration/bleu-base:jazzy-cuda-26-02
+FROM registry.gitlab.com/bleurobotics/code/bleu_integration/bleu-base:jazzy-cuda-26-03
 
 SHELL ["/bin/bash", "-c"]
 
@@ -45,7 +45,7 @@ RUN git clone https://github.com/humanoid-path-planner/hpp-fcl.git && \
 
 ## PINOCCHIO
 WORKDIR /home/forest_ws/src
-RUN git clone -b devel https://github.com/stack-of-tasks/pinocchio.git && \
+RUN git clone -b v3.9.0 https://github.com/stack-of-tasks/pinocchio.git && \
     cd /home/forest_ws/src/pinocchio && \
     git submodule init && \
     git submodule update && \
@@ -298,7 +298,8 @@ RUN git clone https://github.com/Livox-SDK/Livox-SDK2.git && \
 WORKDIR /opt/unitree_ros2_ws/src/livox_ros_driver2
 RUN rm -f package.xml && \
     cp package_ROS2.xml package.xml && \
-    cp -rf launch_ROS2 launch
+    cp -rf launch_ROS2 launch && \
+    sed -i 's|${LIVOX_INTERFACES_INCLUDE_DIRECTORIES}|$<TARGET_PROPERTY:${LIVOX_INTERFACE_TARGET},INTERFACE_INCLUDE_DIRECTORIES>|g' CMakeLists.txt
 
 WORKDIR /opt/unitree_ros2_ws
 RUN . /opt/ros/${ROS_DISTRO}/setup.sh && \

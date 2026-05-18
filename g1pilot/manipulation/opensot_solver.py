@@ -137,28 +137,34 @@ COLLISION_PAIRS = {
 }
 
 q_init = [
-    -0.6,
-    0.0,
-    0.0,  # hips
-    1.2,  # knee
-    -0.6,
-    0.0,  # ankles
-    -0.6,
-    0.0,
-    0.0,  # hips
-    1.2,  # knee
-    -0.6,
-    # -0.5,
+    # -0.6,
     # 0.0,
     # 0.0,  # hips
-    # 1.0,  # knee
-    # -0.5,
+    # 1.2,  # knee
+    # -0.6,
     # 0.0,  # ankles
-    # -0.5,
+    # -0.6,
     # 0.0,
     # 0.0,  # hips
-    # 1.0,  # knee
-    # -0.5,
+    # 1.2,  # knee
+    # -0.6,
+    
+    ####### 
+### old values
+    -0.5,
+    0.0,
+    0.0,  # hips
+    1.0,  # knee
+    -0.5,
+    0.0,  # ankles
+    -0.5,
+    0.0,
+    0.0,  # hips
+    1.0,  # knee
+    -0.5,
+    
+    #####
+    
     0.0,  # ankles
     0.0,
     0.0,
@@ -406,6 +412,16 @@ class G1CollisionAvoidanceNode(Node):
         q = np.zeros(29)
         for i in range(29):
             q[i] = msg.motor_state[i].q
+        return q
+
+    def get_last_cmd_q(self):
+        """Read back the last commanded q for all 29 motors from self.msg.
+        Falls back to current motor q if no command has been built yet."""
+        if self.msg is None:
+            return self.get_current_motor_q()
+        q = np.zeros(29)
+        for i in range(29):
+            q[i] = self.msg.motor_cmd[i].q
         return q
 
     def _apply_upper_body_cmds(self, q29):
@@ -763,25 +779,19 @@ class G1CollisionAvoidanceNode(Node):
         # then invert it to get the pelvis pose in a frame where the left foot is at the origin.
         self.model.setJointPosition(self.q)
         self.model.update()
-        if self.use_robot:
-            # Match robot_state convention: world origin = left foot contact
-            # Inverse of affine T=(R,t) is (R^T, -R^T @ t)
-            left_foot_pose = self.model.getPose("left_foot_point_contact")
-            R_inv = left_foot_pose.linear.T
-            t_inv = -R_inv @ left_foot_pose.translation
-            quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
-            self.q[0] = t_inv[0]
-            self.q[1] = t_inv[1]
-            self.q[2] = t_inv[2]
-            self.q[3] = quat[0]
-            self.q[4] = quat[1]
-            self.q[5] = quat[2]
-            self.q[6] = quat[3]
-        # else:
-        #     # Simulation: pelvis centered at x=0, y=0, only z adjusted
-        #     left_foot_z = self.model.getPose("left_foot_point_contact").translation[2]
-        #     right_foot_z = self.model.getPose("right_foot_point_contact").translation[2]
-        #     self.q[2] = -min(left_foot_z, right_foot_z)
+        # Match robot_state convention: world origin = left foot contact
+        # Inverse of affine T=(R,t) is (R^T, -R^T @ t)
+        left_foot_pose = self.model.getPose("left_foot_point_contact")
+        R_inv = left_foot_pose.linear.T
+        t_inv = -R_inv @ left_foot_pose.translation
+        quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
+        self.q[0] = t_inv[0]
+        self.q[1] = t_inv[1]
+        self.q[2] = t_inv[2]
+        self.q[3] = quat[0]
+        self.q[4] = quat[1]
+        self.q[5] = quat[2]
+        self.q[6] = quat[3]
 
         self.dq = np.zeros(self.model.nv)
 
@@ -936,12 +946,12 @@ class G1CollisionAvoidanceNode(Node):
         """Scanning stack for whole-body mode: torso oscillation + balance, no hand tracking."""
         stack = (
             self.com % [0, 1]
-            / (self.torso % [3, 4, 5] + self.pelvis % [0, 1, 3, 4, 5] + 0.1 * self.pelvis % [2])
+            / (self.torso % [2, 3, 4, 5] + self.pelvis % [0, 1, 3, 4, 5] ) #0.1 * self.pelvis % [2])
             # / self.postural
         ) << self.qlims << self.dqlims
         if self.enable_collision_avoidance:
             stack = stack << self.collision_avoidance_constraint
-        return stack << self.pelvis_height_constraint << (self.left_foot + self.right_foot)
+        return stack << (self.left_foot + self.right_foot)
 
     def _activate_stack(self, stack):
         """Switch the active stack/solver pair. Both solvers are pre-built in initialize()
@@ -960,18 +970,17 @@ class G1CollisionAvoidanceNode(Node):
 
         self.model.setJointPosition(self.q)
         self.model.update()
-        if self.use_robot:
-            left_foot_pose = self.model.getPose("left_foot_point_contact")
-            R_inv = left_foot_pose.linear.T
-            t_inv = -R_inv @ left_foot_pose.translation
-            quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
-            self.q[0] = t_inv[0]
-            self.q[1] = t_inv[1]
-            self.q[2] = t_inv[2]
-            self.q[3] = quat[0]
-            self.q[4] = quat[1]
-            self.q[5] = quat[2]
-            self.q[6] = quat[3]
+        left_foot_pose = self.model.getPose("left_foot_point_contact")
+        R_inv = left_foot_pose.linear.T
+        t_inv = -R_inv @ left_foot_pose.translation
+        quat = R.from_matrix(R_inv).as_quat()  # [x, y, z, w]
+        self.q[0] = t_inv[0]
+        self.q[1] = t_inv[1]
+        self.q[2] = t_inv[2]
+        self.q[3] = quat[0]
+        self.q[4] = quat[1]
+        self.q[5] = quat[2]
+        self.q[6] = quat[3]
 
         self.dq = np.zeros(self.model.nv)
 
@@ -994,7 +1003,9 @@ class G1CollisionAvoidanceNode(Node):
         Rz = R.from_euler('z', yaw).as_matrix()
         torso_ref = pyaffine3.Affine3()
         torso_ref.linear = Rz @ self._scan_torso_base_pose.linear
-        torso_ref.translation = self._scan_torso_base_pose.translation
+        base_t = self._scan_torso_base_pose.translation
+        dz = -np.cos(2.0 * np.pi * SCAN_FREQ_HZ * 0.8 * self._scan_t) * 0.02 + 0.02
+        torso_ref.translation = np.array([base_t[0], base_t[1], base_t[2] + dz])
         self.torso.setReference(torso_ref)
 
     def _apply_hand_ref(self, gripper_task, marker_name, pose_ref, frame_ref):
@@ -1020,30 +1031,33 @@ class G1CollisionAvoidanceNode(Node):
 
     def control_loop(self):
         if self._resetting:
+            # Hold the last command so joints keep their torque while the reset
+            # runs on another thread; otherwise the robot goes limp and falls.
+            if (
+                self.use_robot
+                and self.send_cmds_to_robot
+                and self.lowcmd_publisher is not None
+                and self.msg is not None
+                and not self.emergency_stop
+            ):
+                self._publish_lowcmd()
             return
 
-        # Whole-body gradual init: triggered by start_opensot, interpolates to q_init first
+        # Whole-body gradual init: run the OpenSoT solver from the start, so
+        # self.q evolves toward its steady-state pose (CoM offset, etc.) over
+        # the warmup window. The published joint command is a smoothstep blend
+        # from the last commanded q into self.q[7:], so the motors transition
+        # directly to OpenSoT's converged pose — not via q_init, which would
+        # otherwise cause a visible lean once OpenSoT engages and pulls the
+        # CoM target.
         if self.use_whole_body and self.start_opensot and not self._wb_init_done:
             if not self._wb_init_active:
-                # First tick after start_opensot: read fresh robot state and begin
-                self._wb_q_start = self.get_current_motor_q()
+                self._wb_q_start = self.get_last_cmd_q()
                 self._wb_init_start_time = time.time()
                 self._wb_init_active = True
-                self.get_logger().info("[WB] start_opensot received: 3s gradual init to q_init")
-            elapsed = time.time() - self._wb_init_start_time
-            alpha = min(elapsed / self._wb_init_duration, 1.0)
-            if self.use_robot and self.lowcmd_publisher is not None and not self.emergency_stop:
-                q_interp = (1.0 - alpha) * self._wb_q_start + alpha * np.array(q_init)
-                self._apply_upper_body_cmds(q_interp)
-                self._apply_leg_cmds(q_interp)
-                self._publish_lowcmd()
-            if alpha >= 1.0:
-                self._wb_init_active = False
-                self._wb_init_done = True
-                self.get_logger().info("[WB] Gradual init complete. OpenSoT starting.")
-            return
+                self.get_logger().info("[WB] start_opensot received: gradual init via OpenSoT")
 
-        if self.start_opensot and not self.emergency_stop and (not self.use_whole_body or self._wb_init_done):
+        if self.start_opensot and not self.emergency_stop:
             self.model.setJointPosition(self.q)
             self.model.setJointVelocity(self.dq)
             self.model.update()
@@ -1152,9 +1166,21 @@ class G1CollisionAvoidanceNode(Node):
                     self.lowcmd_publisher.Write(self.msg)
                 return
 
-            self._apply_upper_body_cmds(self.q[7:])
+            q_cmd = self.q[7:]
+            if self.use_whole_body and self._wb_init_active and not self._wb_init_done:
+                alpha = min(
+                    (time.time() - self._wb_init_start_time) / self._wb_init_duration,
+                    1.0,
+                )
+                s = alpha * alpha * (3.0 - 2.0 * alpha)
+                q_cmd = (1.0 - s) * self._wb_q_start + s * q_cmd
+                if alpha >= 1.0:
+                    self._wb_init_active = False
+                    self._wb_init_done = True
+                    self.get_logger().info("[WB] Gradual init complete. OpenSoT taking over directly.")
+            self._apply_upper_body_cmds(q_cmd)
             if self.use_whole_body:
-                self._apply_leg_cmds(self.q[7:])
+                self._apply_leg_cmds(q_cmd)
             self._publish_lowcmd()
 
             # publish self-collision debugging

@@ -46,6 +46,16 @@ ros2 topic pub --once /g1pilot/arms/enabled std_msgs/msg/Bool "{data: true}"
 ros2 topic pub --once /g1pilot/arms/home std_msgs/msg/Bool "{data: true}"
 ```
 
+### ENTER SCANNING MODE
+```bash
+ros2 topic pub --once /g1pilot/scanning_mode std_msgs/msg/Int8 "{data: 1}"
+```
+
+### EXIT SCANNING MODE
+```bash
+ros2 topic pub --once /g1pilot/scanning_mode std_msgs/msg/Int8 "{data: 0}"
+```
+
 ### PUBLISH POINT
 ```bash
 ros2 topic pub -1 /g1pilot/hand_goal/left geometry_msgs/msg/PoseStamped "{header: {stamp: {sec: 0, nanosec: 0}, frame_id: 'pelvis'}, pose: {position: {x: 0.20, y: 0.17, z: 0.09}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}"
@@ -58,3 +68,7 @@ ros2 topic pub --once /g1pilot/dx3/hand_action/right std_msgs/msg/String "{data:
 ```bash
 ros2 topic pub --once /g1pilot/dx3/hand_action/right std_msgs/msg/String "{data: 'open'}"
 ```
+
+
+#### RESET ROBOT (reset the position)
+

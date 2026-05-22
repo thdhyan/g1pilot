@@ -7,7 +7,6 @@ Panels:
         - /Global Options1
         - /Status1
         - /RobotModel1
-        - /RobotModel1/Status1
         - /TF1/Frames1
         - /Nav2Goal1/RobotOdometry1/Shape1
         - /Controller1/InteractiveMarkers1
@@ -353,6 +352,16 @@ Visualization Manager:
         All Enabled: false
         base_link:
           Value: true
+        camera_color_frame:
+          Value: true
+        camera_color_optical_frame:
+          Value: true
+        camera_depth_frame:
+          Value: true
+        camera_depth_optical_frame:
+          Value: true
+        camera_link:
+          Value: true
         d435_link:
           Value: false
         head_link:
@@ -467,6 +476,8 @@ Visualization Manager:
           Value: true
         waist_yaw_link:
           Value: true
+        world:
+          Value: true
       Marker Scale: 0.4000000059604645
       Name: TF
       Show Arrows: true
@@ -474,6 +485,8 @@ Visualization Manager:
       Show Names: false
       Tree:
         base_link:
+          {}
+        world:
           pelvis:
             imu_in_pelvis:
               {}
@@ -525,7 +538,13 @@ Visualization Manager:
               waist_roll_link:
                 torso_link:
                   d435_link:
-                    {}
+                    camera_link:
+                      camera_color_frame:
+                        camera_color_optical_frame:
+                          {}
+                      camera_depth_frame:
+                        camera_depth_optical_frame:
+                          {}
                   head_link:
                     {}
                   imu_in_torso:
@@ -996,4 +1015,4 @@ Window Geometry:
     collapsed: true
   Width: 1834
   X: 86
-  Y: 27
+  Y: 32

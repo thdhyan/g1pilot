@@ -136,8 +136,8 @@ class G1LocoClient(Node):
             self._clear_once("_e_stop_activated_logged")
 
     def base_height_callback(self, msg: Float64):
-        # self.get_logger().warning(f"Received base height command: {msg.data}")
-        self.robot.SetStandHeight(msg.data)
+        if self.use_robot and self.robot is not None:
+            self.robot.SetStandHeight(msg.data)
 
     def start_callback(self, msg: Bool):
         if self.use_robot and self.robot is not None and msg.data:

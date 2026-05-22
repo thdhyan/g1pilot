@@ -1,1 +1,1 @@
-docker build -t g1pilot-from-bleu-base:2026.03 .
+docker build -t g1pilot-from-bleu-base:2026.05 .

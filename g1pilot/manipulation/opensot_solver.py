@@ -322,6 +322,9 @@ class G1CollisionAvoidanceNode(Node):
         self._wb_q_start = None
         self._wb_init_start_time = None
         self._wb_init_duration = 3.0
+        # False until OpenSoT has run once. On the very first start there is no
+        # meaningful last command, so the init blend must start from real TF.
+        self._opensot_ever_started = False
 
         self.scanning_mode = 0
         self._scan_active = False
@@ -1052,7 +1055,16 @@ class G1CollisionAvoidanceNode(Node):
         # CoM target.
         if self.use_whole_body and self.start_opensot and not self._wb_init_done:
             if not self._wb_init_active:
-                self._wb_q_start = self.get_last_cmd_q()
+                if self._opensot_ever_started:
+                    # Re-start (e.g. after a reset): blend from the last
+                    # published command, which the robot is already tracking
+                    # because it was held in place during the reset.
+                    self._wb_q_start = self.get_last_cmd_q()
+                else:
+                    # Very first start: no command has been published yet, so
+                    # blend from the real measured robot state (real TF).
+                    self._wb_q_start = self.get_current_motor_q()
+                    self._opensot_ever_started = True
                 self._wb_init_start_time = time.time()
                 self._wb_init_active = True
                 self.get_logger().info("[WB] start_opensot received: gradual init via OpenSoT")

@@ -15,7 +15,7 @@ from rclpy.node import Node
 from rcl_interfaces.srv import GetParameters
 
 from geometry_msgs.msg import PoseStamped, TransformStamped, WrenchStamped,Point
-from std_msgs.msg import Bool, Float64
+from std_msgs.msg import Bool, Float64, Int8
 from std_srvs.srv import Trigger
 from sensor_msgs.msg import JointState
 
@@ -264,8 +264,7 @@ class G1CollisionAvoidanceNode(Node):
 
         self.start_opensot_sub = self.create_subscription(Bool, "/g1pilot/start_opensot", self.start_opensot_callback, 10)
         self.emergency_stop_sub = self.create_subscription(Bool, "/g1pilot/emergency_stop", self.emergency_stop_callback, 10)
-        self.scanning_enter_service = self.create_service(Trigger, "/g1pilot/scanning_mode/enter", self.scanning_enter_callback)
-        self.scanning_exit_service = self.create_service(Trigger, "/g1pilot/scanning_mode/exit", self.scanning_exit_callback)
+        self.scanning_mode_sub = self.create_subscription(Int8, "/g1pilot/scanning_mode", self.scanning_mode_callback, 10)
         self.righ_hand_subscriber = self.create_subscription(
             PoseStamped, "/g1pilot/right_hand/pose_ref", self.right_hand_pose_ref_callback, 10
         )
@@ -521,35 +520,15 @@ class G1CollisionAvoidanceNode(Node):
     def emergency_stop_callback(self, msg: Bool):
         self.emergency_stop = bool(msg.data)
 
-    def scanning_enter_callback(self, request, response):
-        if self._resetting:
-            response.success = False
-            response.message = "Reset in progress, ignoring scanning enter"
-            return response
-        if self.scanning_mode == 1:
-            response.success = True
-            response.message = "Already in scanning mode"
-            return response
-        self.scanning_mode = 1
-        self._enter_scanning()
-        response.success = True
-        response.message = "Entered scanning mode"
-        return response
-
-    def scanning_exit_callback(self, request, response):
-        if self._resetting:
-            response.success = False
-            response.message = "Reset in progress, ignoring scanning exit"
-            return response
-        if self.scanning_mode == 0:
-            response.success = True
-            response.message = "Already in operation mode"
-            return response
-        self.scanning_mode = 0
-        self._exit_scanning()
-        response.success = True
-        response.message = "Exited scanning mode"
-        return response
+    def scanning_mode_callback(self, msg: Int8):
+        new_mode = int(msg.data)
+        if new_mode == self.scanning_mode or self._resetting:
+            return
+        self.scanning_mode = new_mode
+        if new_mode == 1:
+            self._enter_scanning()
+        else:
+            self._exit_scanning()
 
     def _enter_scanning(self):
         if not self.start_opensot:

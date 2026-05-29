@@ -480,17 +480,19 @@ class G1CollisionAvoidanceNode(Node):
             self.left_hand_pose_ref = msg
 
     def _do_full_reset(self):
-        """Clear hand refs, reset OpenSoT q to q_init, recreate markers, reset WB init state."""
+        """Clear hand refs, reset OpenSoT q to q_init, reset WB init state, move markers off-thread."""
         self._resetting = True
         self.right_hand_pose_ref = None
         self.left_hand_pose_ref = None
+        for name in list(self.marker_enabled):
+            self.marker_enabled[name] = False
         self.reset_opensot()
-        self.initialize_imarkers()
         self._wb_init_active = False
         self._wb_init_done = False
         self._wb_q_start = None
         self._wb_init_start_time = None
         self._resetting = False
+        threading.Thread(target=self._reset_marker_poses, daemon=True).start()
 
     def reset_callback(self, request, response):
         """Service callback for /g1pilot/reset. Re-initializes if no hand commands are active."""
@@ -612,6 +614,30 @@ class G1CollisionAvoidanceNode(Node):
         left_hand_ref = self.left_gripper.getReference()
         self.get_logger().info(f"Initial left hand pose:\n{left_hand_ref}")
         self.make_6dof_marker("left_hand_marker", left_hand_ref[0], self.left_hand_frame_ref)
+
+    def _reset_marker_poses(self):
+        """Move existing interactive markers back to current hand FK poses (no rebuild)."""
+        right_hand_ref, _ = self.right_gripper.getReference()
+        left_hand_ref, _ = self.left_gripper.getReference()
+        self._set_marker_pose("right_hand_marker", right_hand_ref, self.right_hand_frame_ref)
+        self._set_marker_pose("left_hand_marker", left_hand_ref, self.left_hand_frame_ref)
+
+    def _set_marker_pose(self, name, pose, frame_id):
+        ps = PoseStamped()
+        ps.header.frame_id = frame_id
+        ps.pose.position.x = pose.translation[0]
+        ps.pose.position.y = pose.translation[1]
+        ps.pose.position.z = pose.translation[2]
+        quat_xyzw = R.from_matrix(pose.linear).as_quat()  # [x, y, z, w]
+        ps.pose.orientation.x = quat_xyzw[0]
+        ps.pose.orientation.y = quat_xyzw[1]
+        ps.pose.orientation.z = quat_xyzw[2]
+        ps.pose.orientation.w = quat_xyzw[3]
+        self.marker_poses[name] = ps
+        if name in self.marker_home_poses:
+            self.marker_home_poses[name].pose = ps.pose
+        self.interactive_marker_server.setPose(name, ps.pose, ps.header)
+        self.interactive_marker_server.applyChanges()
 
     def make_6dof_marker(self, name, pose, frame_id):
         int_marker = InteractiveMarker()

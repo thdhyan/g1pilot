@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import gc
 import subprocess
 import threading
 import time
@@ -71,17 +72,17 @@ JOINT_GAINS = {
     "kWaistRoll":  (400.0, 10.0, 0.0),
     "kWaistPitch": (400.0, 10.0, 0.0),
     # Left arm
-    "kLeftShoulderPitch": (700.0, 10.0, 0.0),
-    "kLeftShoulderRoll":  (500.0, 10.0, 0.0),
-    "kLeftShoulderYaw":   (250.0,  5.0, 0.0),
+    "kLeftShoulderPitch": (500.0, 10.0, 0.0),
+    "kLeftShoulderRoll":  (400.0, 10.0, 0.0),
+    "kLeftShoulderYaw":   (200.0,  5.0, 0.0),
     "kLeftElbow":         (150.0,  5.0, 0.0),
     "kLeftWristRoll":     (100.0,  2.0, 0.0),
     "kLeftWristPitch":    (100.0,  2.0, 0.0),
     "kLeftWristyaw":      (100.0,  2.0, 0.0),
     # Right arm
-    "kRightShoulderPitch": (700.0, 10.0, 0.0),
-    "kRightShoulderRoll":  (500.0, 10.0, 0.0),
-    "kRightShoulderYaw":   (250.0,  5.0, 0.0),
+    "kRightShoulderPitch": (500.0, 10.0, 0.0),
+    "kRightShoulderRoll":  (400.0, 10.0, 0.0),
+    "kRightShoulderYaw":   (200.0,  5.0, 0.0),
     "kRightElbow":         (150.0,  5.0, 0.0),
     "kRightWristRoll":     (100.0,  2.0, 0.0),
     "kRightWristPitch":    (100.0,  2.0, 0.0),
@@ -151,39 +152,72 @@ q_init = [
     
     ####### 
 ### old values
-    -0.5,
-    0.0,
-    0.0,  # hips
-    1.0,  # knee
-    -0.5,
-    0.0,  # ankles
-    -0.5,
-    0.0,
-    0.0,  # hips
-    1.0,  # knee
-    -0.5,
-    
-    #####
-    
-    0.0,  # ankles
-    0.0,
-    0.0,
-    0.0,  # waist
-    0.3,
-    0.25,
-    0.0,
-    1.0,
-    0.15,
-    0.0,
-    0.0,  # arm
-    0.3,
-    -0.25,
-    0.0,
-    1.0,
-    0.15,
-    0.0,
-    0.0,
+    -0.4841,   #  0 LeftHipPitch
+    0.0297,    #  1 LeftHipRoll
+    -0.0230,   #  2 LeftHipYaw          (hips: roll out, slight yaw)
+    1.1874,    #  3 LeftKnee
+    -0.7036,   #  4 LeftAnklePitch
+    -0.0376,   #  5 LeftAnkleRoll       (roll keeps sole flat)
+
+    -0.4841,   #  6 RightHipPitch
+    -0.0297,   #  7 RightHipRoll
+    0.0230,    #  8 RightHipYaw         (hips)
+    1.1874,    #  9 RightKnee
+    -0.7036,   # 10 RightAnklePitch
+    0.0376,    # 11 RightAnkleRoll      (ankles)
+    0.0,       # 12 WaistYaw
+    0.0,       # 13 WaistRoll
+    0.0,       # 14 WaistPitch          (# 0.05)
+    0.3,       # 15 LeftShoulderPitch   (# 0.3)
+    0.25,      # 16 LeftShoulderRoll
+    0.0,       # 17 LeftShoulderYaw
+    1.0,       # 18 LeftElbow
+    0.15,      # 19 LeftWristRoll
+    0.0,       # 20 LeftWristPitch
+    0.0,       # 21 LeftWristYaw        (left arm)
+    0.3,       # 22 RightShoulderPitch
+    -0.25,     # 23 RightShoulderRoll
+    0.0,       # 24 RightShoulderYaw
+    1.0,       # 25 RightElbow
+    0.15,      # 26 RightWristRoll
+    0.0,       # 27 RightWristPitch
+    0.0,       # 28 RightWristYaw
 ]  # arm
+
+
+q_posture_ref = [
+
+### new values (measured q_init)
+    -0.5418787002563477,    # left_hip_pitch
+    0.018867963925004005,   # left_hip_roll
+    -0.01564173400402069,   # left_hip_yaw
+    1.2276533842086792,     # left_knee
+    -0.6694384813308716,    # left_ankle_pitch
+    -0.02668987214565277,   # left_ankle_roll
+    -0.5376517176628113,    # right_hip_pitch
+    -0.013882526196539402,  # right_hip_roll
+    0.0033747577108442783,  # right_hip_yaw
+    1.2392263412475586,     # right_knee
+    -0.6495804190635681,    # right_ankle_pitch
+    0.02879408560693264,    # right_ankle_roll
+    0.0,    # waist_yaw
+    0.006152449641376734,   # waist_roll
+    0.05840779468417168,    # waist_pitch
+    0.26167556643486023,    # left_shoulder_pitch  (mirror of right)
+    0.55,    # left_shoulder_roll   (-right)
+    0.1,     # left_shoulder_yaw    (-right)
+    0.0746137872338295,     # left_elbow           (= right)
+    -0.052670668810606,     # left_wrist_roll      (-right)
+    -0.054060839116573334,  # left_wrist_pitch     (= right)
+    -0.447550892829895,     # left_wrist_yaw       (-right)
+    0.26167556643486023,    # right_shoulder_pitch
+    -0.55,   # right_shoulder_roll
+    -0.1,    # right_shoulder_yaw
+    0.0746137872338295,     # right_elbow
+    0.052670668810606,      # right_wrist_roll
+    -0.054060839116573334,  # right_wrist_pitch
+    0.447550892829895,      # right_wrist_yaw
+]
 
 
 SCAN_AMPLITUDE_RAD = np.deg2rad(20.0)
@@ -202,6 +236,22 @@ class G1CollisionAvoidanceNode(Node):
     def __init__(self):
         super().__init__("g1_collision_avoidance_node")
         self.get_logger().info("Starting G1 Collision Avoidance Node")
+
+        # Diagnostic: log every cyclic-GC pause so we can confirm whether GC is
+        # the source of jitter in the 200 Hz control loop. A line landing near a
+        # control-loop overrun (esp. gen=2, a few ms) means GC is the culprit;
+        # the fix is gc.freeze()+gc.disable() after init. Remove once confirmed.
+        self._gc_t0 = 0.0
+        def _gc_cb(phase, info):
+            if phase == "start":
+                self._gc_t0 = time.perf_counter()
+            else:
+                dt_ms = (time.perf_counter() - self._gc_t0) * 1e3
+                self.get_logger().warn(
+                    f"[GC] {dt_ms:.2f} ms, gen={info['generation']}, "
+                    f"collected={info['collected']}, uncollectable={info['uncollectable']}"
+                )
+        gc.callbacks.append(_gc_cb)
 
         self.declare_parameter("use_robot", True)
         self.declare_parameter("enable_collision_avoidance", False)
@@ -223,6 +273,12 @@ class G1CollisionAvoidanceNode(Node):
         self.use_whole_body = bool(self.get_parameter("use_whole_body").value)
 
         self.control_dt = 0.005
+        # LowCmd send-rate diagnostic: count robot writes and log the count
+        # (and effective Hz) every half second. _lowcmd_count = successful
+        # writes; _lowcmd_attempts = all tries (including ones that threw).
+        self._lowcmd_count = 0
+        self._lowcmd_attempts = 0
+        self._lowcmd_log_t0 = time.perf_counter()
         self.time = 0.0
         self.t = 0.0
         self.init_duration_s = 3.0
@@ -289,6 +345,14 @@ class G1CollisionAvoidanceNode(Node):
                 self.urdf = val.string_value
         else:
             self.get_logger().error("Failed to get robot_description from parameter server")
+
+        if self.urdf:
+            import re
+            _name = re.search(r'<robot\s+name="([^"]+)"', self.urdf)
+            self.get_logger().info(
+                f"[opensot] Built model from robot_description: "
+                f"robot name='{_name.group(1) if _name else '?'}', {len(self.urdf)} chars"
+            )
 
         self.interactive_marker_server = InteractiveMarkerServer(self, "teleoperation_markers")
         self.marker_poses = {}
@@ -447,11 +511,14 @@ class G1CollisionAvoidanceNode(Node):
             self.msg.motor_cmd[jid].kd = kd
             self.msg.motor_cmd[jid].dq = 0.0
             self.msg.motor_cmd[jid].tau = tau
+            # if jid==4:
+            #     self.msg.motor_cmd[jid].q = float(q29[jid.value]-0.1)
             self.msg.motor_cmd[jid].q = float(q29[jid.value])
 
     def _publish_lowcmd(self):
         """Sync mode_machine, set mode_pr, compute CRC and publish LowCmd."""
         self.msg.mode_machine = self.get_mode_machine()
+        # self.get_logger().info(f"Mode machine = '{self.msg.mode_machine}'")
         self.msg.mode_pr = 0 if self.use_whole_body else 1
         try:
             self.msg.motor_cmd[G1_29_JointIndex.kNotUsedJoint0].q = 1.0
@@ -459,7 +526,12 @@ class G1CollisionAvoidanceNode(Node):
             pass
         self.msg.crc = self.crc.Crc(self.msg)
         if self.send_cmds_to_robot:
-            self.lowcmd_publisher.Write(self.msg)
+            self._lowcmd_attempts += 1
+            try:
+                self.lowcmd_publisher.Write(self.msg)
+                self._lowcmd_count += 1
+            except Exception as e:
+                self.get_logger().warn(f"[LowCmd] Write failed: {e}")
 
     def right_hand_pose_ref_callback(self, msg: PoseStamped):
         self._last_hand_ref_time = time.monotonic()
@@ -829,9 +901,11 @@ class G1CollisionAvoidanceNode(Node):
         self.model.update()
 
         self.com = CoM(self.model)
-        # Offset CoM reference slightly backward (negative X) for stability
+        # CoM X offset (+X = forward). TEST: push 5 cm forward to counteract the
+        # new robot's backward lean (real CoM sits behind the modeled one).
+        # Was -0.01 (1 cm backward) for the old robot. Tune this value.
         com_ref_init, _ = self.com.getReference()
-        com_ref_init[0] -= 0.01  # 2.5 cm backward
+        com_ref_init[0] -= 0.01  # 5 cm forward (test)
         self.com.setReference(com_ref_init)
         self.com.setLambda(0.05)
 
@@ -869,7 +943,7 @@ class G1CollisionAvoidanceNode(Node):
 
         self.get_logger().info("Task: Postural")
         self.postural = Postural(self.model)
-        self.postural.setLambda(0.1) # coman uses 0.01 ?
+        self.postural.setLambda(0.01) # 0.2 or 0.1 ? coman uses 0.01 ?
         self.W = self.postural.getWeight().copy()
         if self.use_whole_body:
             # Zero floating base DOFs so the postural task doesn't fight
@@ -877,7 +951,7 @@ class G1CollisionAvoidanceNode(Node):
             self.W[0:6, 0:6] = 0.0
             # Always target q_init regardless of actual robot state at startup
             q_ref = np.zeros(self.model.nv)
-            q_ref[6:] = q_init
+            q_ref[6:] = q_posture_ref
             self.postural.setReference(q_ref)
         print(self.W.shape)
         self.postural.setWeight(self.W)
@@ -1059,6 +1133,20 @@ class G1CollisionAvoidanceNode(Node):
         gripper_task.setReference(T)
 
     def control_loop(self):
+        now = time.perf_counter()
+        dt_log = now - self._lowcmd_log_t0
+        if dt_log >= 0.5:
+            failed = self._lowcmd_attempts - self._lowcmd_count
+            self.get_logger().info(
+                f"[LowCmd] sent {self._lowcmd_count}/{self._lowcmd_attempts} "
+                f"(failed {failed}) in {dt_log*1e3:.0f} ms "
+                f"({self._lowcmd_count / dt_log:.1f} Hz ok, "
+                f"{self._lowcmd_attempts / dt_log:.1f} Hz attempted)"
+            )
+            self._lowcmd_count = 0
+            self._lowcmd_attempts = 0
+            self._lowcmd_log_t0 = now
+
         if self._resetting:
             # Hold the last command so joints keep their torque while the reset
             # runs on another thread; otherwise the robot goes limp and falls.

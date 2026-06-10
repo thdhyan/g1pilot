@@ -13,14 +13,17 @@ from unitree_sdk2py.idl.default import unitree_hg_msg_dds__HandCmd_
 from astroviz_interfaces.msg import MotorState, MotorStateList
 
 #CLOSE_RIGHT_VALUES = [-0.10, 0.63, -1.74, 1.06, 0.95, 0.91, 1.22]
-CLOSE_RIGHT_VALUES_1 = [0.00,  0.0,  0.0, 1.2, 1.6, 0.0, 0.0] # 1 finger
-CLOSE_RIGHT_VALUES_2 = [0.00,  0.0,  0.0, 1.2, 1.6, 1.2, 1.6] # closed Hand
-CLOSE_LEFT_VALUES_1  = [0.04,  0.6,  1.4, -1.2, -1.4, -0.0, 0.0] # 1 finger
-CLOSE_LEFT_VALUES_2  = [0.04,  0.6,  1.4, -1.2, -1.6, -1.2, -1.4] # closed Hand
+CLOSE_RIGHT_VALUES_1 = [0.00,  -0.6,  -1.4, 1.2, 1.4, -0.0, 0.0] # 1 finger
+CLOSE_RIGHT_VALUES_2 = [-0.00,  -0.6,  -1.4, 1.2, 1.6, 1.2, 1.4] # closed Hand
+CLOSE_LEFT_VALUES_1  = [0.65,  0.6,  1.4, -1.2, -1.4, -0.0, 0.0]#0.6,  1.4, -1.2, -1.4, -0.0, 0.0] # 1 finger
+CLOSE_LEFT_VALUES_2  = [0.65, 0.6,  1.4, -1.2, -1.6, -1.2, -1.4]  #0.6,  1.4, -1.2, -1.6, -1.2, -1.4] # closed Hand
 # CLOSE_LEFT_VALUES  = [0.04,  -0.04,  1.51, -1.10, -1.47, -1.13, -1.23]
 # CLOSE_LEFT_VALUES  = [0.04,  0.4,  1.5, -1.10, -1.58, -1.13, -1.32] motor gripper
 
-OPEN_VALUES          = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+OPEN_RIGHT_VALUES          = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+OPEN_LEFT_VALUES          = [0.65, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
 
 class DX3Controller(Node):
     def __init__(self):
@@ -38,8 +41,8 @@ class DX3Controller(Node):
 
         self.right_action = None
         self.left_action = None
-        self.right_target = OPEN_VALUES
-        self.left_target = OPEN_VALUES
+        self.right_target = OPEN_RIGHT_VALUES
+        self.left_target = OPEN_LEFT_VALUES
         self.total_motors = 7
         self.send_commands = True
 
@@ -84,7 +87,7 @@ class DX3Controller(Node):
             self.right_target = CLOSE_RIGHT_VALUES_1
         elif msg.point.x > 0.5:
             self.right_action = "open"
-            self.right_target = OPEN_VALUES
+            self.right_target = OPEN_RIGHT_VALUES
         else:
             self.right_action = "close_2"
             self.right_target = CLOSE_RIGHT_VALUES_2
@@ -95,7 +98,7 @@ class DX3Controller(Node):
             self.left_target = CLOSE_LEFT_VALUES_1
         elif msg.point.x > 0.5:
             self.left_action = "open"
-            self.left_target = OPEN_VALUES
+            self.left_target = OPEN_LEFT_VALUES
         else:
             self.left_action = "close_2"
             self.left_target = CLOSE_LEFT_VALUES_2
@@ -141,7 +144,9 @@ class DX3Controller(Node):
         kd = self.get_parameter("grasp_kd").get_parameter_value().double_value
         cmd = unitree_hg_msg_dds__HandCmd_()
         for i in range(self.total_motors):
-            cmd.motor_cmd[i].mode = 0
+            # Dex3 mode byte: id(bits0-3) | status(bits4-6) | timeout(bit7).
+            # status=1 enables the motor (FOC); 0 leaves it limp.
+            cmd.motor_cmd[i].mode = 0 #(i & 0x0F) | (0x01 << 4)
             cmd.motor_cmd[i].q = values[i]
             cmd.motor_cmd[i].dq = 0.0
             cmd.motor_cmd[i].tau = 0.0
@@ -153,6 +158,7 @@ class DX3Controller(Node):
         if not self.send_commands:
             return
         if hasattr(self, "right_pub") and self.right_action is not None:
+            self.get_logger().info(f"WRITE right q={self.right_target} action={self.right_action}")
             self.right_pub.Write(self.create_cmd(self.right_target))
         if hasattr(self, "left_pub") and self.left_action is not None:
             self.left_pub.Write(self.create_cmd(self.left_target))

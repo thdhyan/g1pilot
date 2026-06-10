@@ -28,6 +28,11 @@ def generate_launch_description():
         DeclareLaunchArgument("right_hand_frame_ref", default_value="world"),
         DeclareLaunchArgument("left_hand_frame_ref", default_value="world"),
         DeclareLaunchArgument(
+            "hand_type",
+            default_value=EnvironmentVariable("HAND_TYPE", default_value="dx3"),
+            description="Dexterous hand controller: 'dx3' (Unitree Dex3) or 'brainco' (Revo2).",
+        ),
+        DeclareLaunchArgument(
             "interface",
             default_value=EnvironmentVariable("G1_INTERFACE"),
             description="Network interface for Unitree SDK",
@@ -64,6 +69,7 @@ def generate_launch_description():
                 'use_whole_body': LaunchConfiguration('use_whole_body'),
                 'right_hand_frame_ref': LaunchConfiguration('right_hand_frame_ref'),
                 'left_hand_frame_ref': LaunchConfiguration('left_hand_frame_ref'),
+                'hand_type': LaunchConfiguration('hand_type'),
             }.items(),
         ),
     ])

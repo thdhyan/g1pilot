@@ -25,6 +25,7 @@ services:
       - CYCLONEDDS_URI=file:///cyclonedds.xml
       - G1_LAUNCH_FILE=${G1_LAUNCH_FILE:-bringup_launcher.launch.py}
       - SIMULATION=${SIMULATION:-false}
+      - HAND_TYPE=${HAND_TYPE:-dx3}
       - ENABLE_COLLISION_AVOIDANCE=${ENABLE_COLLISION_AVOIDANCE:-true}
       - ENABLE_EXTERNAL_COLLISION_AVOIDANCE=${ENABLE_EXTERNAL_COLLISION_AVOIDANCE:-true}
       - BOX_POSE_TOPIC=${BOX_POSE_TOPIC:-/g1pilot/box_pose}

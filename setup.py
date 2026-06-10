@@ -65,6 +65,7 @@ setup(
             # Manipulation Nodes
             'interactive_marker = g1pilot.manipulation.interactive_marker:main',
             'dx3_controller = g1pilot.manipulation.dx3_hand:main',
+            'brainco_controller = g1pilot.manipulation.brainco_hand:main',
             'opensot_solver = g1pilot.manipulation.opensot_solver:main',
 
             # Teleoperation Nodes

@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, EnvironmentVariable
+from launch.conditions import IfCondition
+from launch.substitutions import LaunchConfiguration, EnvironmentVariable, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 import os
@@ -26,6 +27,11 @@ def generate_launch_description():
     use_whole_body = LaunchConfiguration("use_whole_body")
     right_hand_frame_ref = LaunchConfiguration("right_hand_frame_ref")
     left_hand_frame_ref = LaunchConfiguration("left_hand_frame_ref")
+    hand_type = LaunchConfiguration("hand_type")
+
+    # Which dexterous hand controller to launch: "dx3" (Unitree Dex3) or "brainco" (Revo2).
+    is_dx3 = IfCondition(PythonExpression(["'", hand_type, "' == 'dx3'"]))
+    is_brainco = IfCondition(PythonExpression(["'", hand_type, "' == 'brainco'"]))
 
     return LaunchDescription([
         DeclareLaunchArgument("interface", default_value=EnvironmentVariable("G1_INTERFACE")),
@@ -44,6 +50,8 @@ def generate_launch_description():
         DeclareLaunchArgument("use_whole_body", default_value="false"),
         DeclareLaunchArgument("right_hand_frame_ref", default_value="pelvis"),
         DeclareLaunchArgument("left_hand_frame_ref", default_value="pelvis"),
+        DeclareLaunchArgument("hand_type", default_value="dx3",
+                              description="Dexterous hand controller to launch: 'dx3' or 'brainco'."),
 
         Node(
             package='g1pilot',
@@ -68,6 +76,20 @@ def generate_launch_description():
             package='g1pilot',
             executable='dx3_controller',
             name='dx3_controller',
+            condition=is_dx3,
+            parameters=[{
+                'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
+                'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str),
+                'use_robot': ParameterValue(use_robot, value_type=bool),
+            }],
+            output='screen'
+        ),
+
+        Node(
+            package='g1pilot',
+            executable='brainco_controller',
+            name='brainco_controller',
+            condition=is_brainco,
             parameters=[{
                 'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
                 'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str),

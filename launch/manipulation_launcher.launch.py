@@ -28,6 +28,8 @@ def generate_launch_description():
     right_hand_frame_ref = LaunchConfiguration("right_hand_frame_ref")
     left_hand_frame_ref = LaunchConfiguration("left_hand_frame_ref")
     hand_type = LaunchConfiguration("hand_type")
+    enable_tts = LaunchConfiguration("enable_tts")
+    tts_topic = LaunchConfiguration("tts_topic")
 
     # Which dexterous hand controller to launch: "dx3" (Unitree Dex3) or "brainco" (Revo2).
     is_dx3 = IfCondition(PythonExpression(["'", hand_type, "' == 'dx3'"]))
@@ -52,6 +54,10 @@ def generate_launch_description():
         DeclareLaunchArgument("left_hand_frame_ref", default_value="pelvis"),
         DeclareLaunchArgument("hand_type", default_value="dx3",
                               description="Dexterous hand controller to launch: 'dx3' or 'brainco'."),
+        DeclareLaunchArgument("enable_tts", default_value="true",
+                              description="Launch the text-to-speech node."),
+        DeclareLaunchArgument("tts_topic", default_value="/g1pilot/say",
+                              description="Topic the TTS node speaks (std_msgs/String)."),
 
         Node(
             package='g1pilot',
@@ -94,6 +100,18 @@ def generate_launch_description():
                 'arm_controlled': ParameterValue(LaunchConfiguration("arm_controlled"), value_type=str),
                 'interface': ParameterValue(LaunchConfiguration("interface"), value_type=str),
                 'use_robot': ParameterValue(use_robot, value_type=bool),
+            }],
+            output='screen'
+        ),
+
+        Node(
+            package='g1pilot',
+            executable='tts_node',
+            name='tts_node',
+            condition=IfCondition(enable_tts),
+            parameters=[{
+                'interface': interface,
+                'topic': tts_topic,
             }],
             output='screen'
         ),

@@ -38,7 +38,8 @@ from unitree_sdk2py.utils.crc import CRC
 from unitree_sdk2py.g1.loco.g1_loco_client import LocoClient
 from unitree_sdk2py.g1.audio.g1_audio_client import AudioClient
 
-from g1pilot.state.say import synthesize_pcm, play_stream, play_stop, CHUNK_SIZE
+# Speech moved to the dedicated g1pilot tts_node (subscribes to /g1pilot/say).
+# from g1pilot.state.say import synthesize_pcm, play_stream, play_stop, CHUNK_SIZE
 from g1pilot.utils.common import (
     MotorState,
     G1_29_JointArmIndex,
@@ -220,6 +221,19 @@ q_posture_ref = [
 ]
 
 
+# Shutdown / rest pose: deep folded crouch the robot eases into before
+# power-off (and the pose it starts from on power-up). Measured on the robot.
+# Only legs+waist (indices 0..14) are commanded toward this; the arms hang
+# limp during the park ramp, so the arm entries (15..28) are informational.
+PARK_POSE = np.array([
+    -2.2180,  0.0151, -0.0742,  2.8548, -0.2496, -0.0284,   #  0..5  left leg
+    -2.2428,  0.0181,  0.0793,  2.8483, -0.1675,  0.0203,   #  6..11 right leg
+    -0.0055, -0.0167,  0.5270,                              # 12..14 waist
+     0.0492,  0.0147,  1.0290,  1.3693, -1.2997,  0.1748, -1.1806,  # 15..21 left arm (limp)
+    -0.0373, -0.0991,  2.3825,  1.4383, -1.5155,  0.1812,  1.3074,  # 22..28 right arm (limp)
+])
+
+
 SCAN_AMPLITUDE_RAD = np.deg2rad(20.0)
 SCAN_FREQ_HZ = 0.05
 
@@ -329,6 +343,7 @@ class G1CollisionAvoidanceNode(Node):
         )
 
         self.reset_service = self.create_service(Trigger, "/g1pilot/reset", self.reset_callback)
+        self.park_service = self.create_service(Trigger, "/g1pilot/park", self.park_callback)
 
         while not self.client.wait_for_service(timeout_sec=1.0):
             self.get_logger().warn("Service /robot_state_publisher/get_parameters not available, waiting...")
@@ -381,25 +396,40 @@ class G1CollisionAvoidanceNode(Node):
         self.msg = None
         self.all_motor_q = None
 
-        self._wb_init_active = False
-        self._wb_init_done = False
-        self._wb_q_start = None
-        self._wb_init_start_time = None
-        self._wb_init_duration = 3.0
-        # False until OpenSoT has run once. On the very first start there is no
-        # meaningful last command, so the init blend must start from real TF.
+        # Init ramps: each entry is a timed smoothstep blend for one joint
+        # group ("leg" = legs+waist, "arm" = arms), keyed off a shared t0.
+        # delay/duration are chosen per profile when start_opensot fires:
+        #   first bring-up -> legs (0s, 15s), then arms (15s, 5s); arms are
+        #                     limp until their ramp begins.
+        #   reset-restart  -> both (0s, 3s) together, no limp (old behavior).
+        # q_start is the blend start pose, captured when each ramp begins.
+        # _ramp_t0 is None when no ramp is armed (also the arm_sdk case).
+        self._ramp_t0 = None
+        self._leg_ramp = {"delay": 0.0, "duration": 15.0, "q_start": None}
+        self._arm_ramp = {"delay": 0.0, "duration": 5.0, "q_start": None}
+        # Park only: the waist follows the legs after a delay (set in park_callback).
+        self._waist_ramp = {"delay": 0.0, "duration": 15.0, "q_start": None}
+        # Blend start pose source: measured on first start, last command on a
+        # reset-restart (the robot is held at the last command during a reset).
+        self._ramp_capture = self.get_current_motor_q
+        # False until OpenSoT has run once (selects first-vs-reset profile).
         self._opensot_ever_started = False
+        # Park (shutdown) mode: when True the leg ramp targets PARK_POSE and the
+        # arms are held limp, instead of tracking the OpenSoT solution.
+        self._park_active = False
 
         self.scanning_mode = 0
         self._scan_active = False
         self._scan_t = 0.0
         self._scan_torso_base_pose = None
 
-        self.audio_client = None
-        self._say_thread = None
+        self.audio_client = None  # kept for LED control; speech moved to tts_node
+        # self._say_thread = None  # speech moved to tts_node (/g1pilot/say)
 
         # Precompute joint index sets (hardware-independent, used by motor command helpers)
         self._leg_joint_ids = [j for j in G1_29_JointIndex if j.value < 12]
+        self._waist_joint_ids = list(G1_29_JointWaistIndex)
+        self._arm_joint_ids = list(G1_29_JointArmIndex)
 
         if self.use_robot:
             self.get_logger().info("use_robot=True -> Initializing Unitree DDS interface")
@@ -462,9 +492,10 @@ class G1CollisionAvoidanceNode(Node):
 
         self.all_motor_q = self.get_current_motor_q()
 
-        self._apply_upper_body_cmds(self.all_motor_q)
+        self._apply_arm_cmds(self.all_motor_q)
         if self.use_whole_body:
             self._apply_leg_cmds(self.all_motor_q)
+            self._apply_waist_cmds(self.all_motor_q)
 
         self._initialized = True
 
@@ -491,29 +522,49 @@ class G1CollisionAvoidanceNode(Node):
             q[i] = self.msg.motor_cmd[i].q
         return q
 
-    def _apply_upper_body_cmds(self, q29):
-        """Set arm and waist motor commands from a 29-element joint position array."""
-        for jid in list(G1_29_JointArmIndex) + list(G1_29_JointWaistIndex):
+    def _ramp_cmd(self, ramp, now, q_target):
+        """Resolve one init ramp at time `now`.
+        Returns ('limp'|'blend'|'track', q_cmd):
+          limp  -> ramp not started yet; drive the group with zero gains
+          blend -> smoothstep from the captured start pose toward q_target
+          track -> ramp finished (or none armed); follow q_target directly
+        """
+        if self._ramp_t0 is None:
+            return "track", q_target
+        t_begin = self._ramp_t0 + ramp["delay"]
+        if now < t_begin:
+            return "limp", q_target
+        a = min((now - t_begin) / ramp["duration"], 1.0) if ramp["duration"] > 0 else 1.0
+        if a >= 1.0:
+            return "track", q_target
+        if ramp["q_start"] is None:
+            ramp["q_start"] = self._ramp_capture()
+        s = a * a * (3.0 - 2.0 * a)
+        return "blend", (1.0 - s) * ramp["q_start"] + s * q_target
+
+    def _apply_motor_cmds(self, q29, jids, limp=False):
+        """Drive the given motors from a 29-element joint position array.
+        limp=True -> zero gains (joints hang free); limp=False -> full PD."""
+        for jid in jids:
             kp, kd, tau = JOINT_GAINS_BY_ID[jid.value]
-            self.msg.motor_cmd[jid].mode = 1
-            self.msg.motor_cmd[jid].kp = kp
-            self.msg.motor_cmd[jid].kd = kd
+            self.msg.motor_cmd[jid].mode = 0 if limp else 1
+            self.msg.motor_cmd[jid].kp = 0.0 if limp else kp
+            self.msg.motor_cmd[jid].kd = 0.0 if limp else kd
             self.msg.motor_cmd[jid].dq = 0.0
             self.msg.motor_cmd[jid].tau = tau
             self.msg.motor_cmd[jid].q = float(q29[jid.value])
 
+    def _apply_arm_cmds(self, q29, limp=False):
+        """Arm motor commands (limp=True -> arms hang free)."""
+        self._apply_motor_cmds(q29, self._arm_joint_ids, limp=limp)
+
     def _apply_leg_cmds(self, q29):
-        """Set leg motor commands from a 29-element joint position array (whole-body mode)."""
-        for jid in self._leg_joint_ids:
-            kp, kd, tau = JOINT_GAINS_BY_ID[jid.value]
-            self.msg.motor_cmd[jid].mode = 1
-            self.msg.motor_cmd[jid].kp = kp
-            self.msg.motor_cmd[jid].kd = kd
-            self.msg.motor_cmd[jid].dq = 0.0
-            self.msg.motor_cmd[jid].tau = tau
-            # if jid==4:
-            #     self.msg.motor_cmd[jid].q = float(q29[jid.value]-0.1)
-            self.msg.motor_cmd[jid].q = float(q29[jid.value])
+        """Leg (hip/knee/ankle) motor commands (whole-body mode)."""
+        self._apply_motor_cmds(q29, self._leg_joint_ids)
+
+    def _apply_waist_cmds(self, q29, limp=False):
+        """Waist (torso) motor commands (limp=True -> torso hangs free)."""
+        self._apply_motor_cmds(q29, self._waist_joint_ids, limp=limp)
 
     def _publish_lowcmd(self):
         """Sync mode_machine, set mode_pr, compute CRC and publish LowCmd."""
@@ -559,12 +610,16 @@ class G1CollisionAvoidanceNode(Node):
         for name in list(self.marker_enabled):
             self.marker_enabled[name] = False
         self.reset_opensot()
-        self._wb_init_active = False
-        self._wb_init_done = False
-        self._wb_q_start = None
-        self._wb_init_start_time = None
+        # Re-arm the init ramp: _ramp_t0=None makes control_loop pick a fresh
+        # profile on the next tick. Since _opensot_ever_started is already True,
+        # that's the reset-restart profile (legs+arms together, 3 s, no limp).
+        self._ramp_t0 = None
+        self._leg_ramp["q_start"] = None
+        self._arm_ramp["q_start"] = None
+        self._waist_ramp["q_start"] = None
+        self._park_active = False
         self._resetting = False
-        threading.Thread(target=self._reset_marker_poses, daemon=True).start()
+        # threading.Thread(target=self._reset_marker_poses, daemon=True).start()
 
     def reset_callback(self, request, response):
         """Service callback for /g1pilot/reset. Re-initializes if no hand commands are active."""
@@ -577,7 +632,7 @@ class G1CollisionAvoidanceNode(Node):
         if elapsed_since_last < 1.0:
             response.success = False
             response.message = "Hand references received less than 1s ago, aborting reset"
-            self.get_logger().warn("[Reset] Aborted: hand reference received %.2fs ago", elapsed_since_last)
+            self.get_logger().warn(f"[Reset] Aborted: hand reference received {elapsed_since_last:.2f}s ago")
             return response
 
         self.get_logger().info("[Reset] Re-initializing...")
@@ -586,6 +641,42 @@ class G1CollisionAvoidanceNode(Node):
 
         response.success = True
         response.message = "Reset and re-initialization complete"
+        return response
+
+    def park_callback(self, request, response):
+        """Service callback for /g1pilot/park. Eases legs+waist from the last
+        command to PARK_POSE over 15 s while the arms hang limp — the shutdown
+        / rest pose. Whole-body only (legs aren't controlled in arm_sdk mode)."""
+        if self._resetting:
+            response.success = False
+            response.message = "Reset in progress"
+            return response
+        if not self.use_whole_body:
+            response.success = False
+            response.message = "Park requires whole-body mode (legs not controlled in arm_sdk)"
+            self.get_logger().warn("[Park] Ignored: not in whole-body mode")
+            return response
+
+        # Drop hand targets/markers so nothing fights the descent (OpenSoT's
+        # output is ignored while parked anyway).
+        self.right_hand_pose_ref = None
+        self.left_hand_pose_ref = None
+        for name in list(self.marker_enabled):
+            self.marker_enabled[name] = False
+
+        # Two ramps off a shared t0, blending from the last command (the robot
+        # is tracking it) toward PARK_POSE. Legs ease first over 15 s; the waist
+        # holds, then follows after a 10 s delay over 5 s. Arms are forced limp
+        # in the control loop, so the arm ramp is unused here.
+        self._ramp_capture = self.get_last_cmd_q
+        self._leg_ramp = {"delay": 0.0, "duration": 15.0, "q_start": None}
+        self._waist_ramp = {"delay": 0.0, "duration": 15.0, "q_start": None}
+        self._ramp_t0 = time.time()
+        self._park_active = True
+        self.get_logger().info("[Park] Easing to shutdown pose (legs 15 s, waist after 10 s, arms limp)")
+
+        response.success = True
+        response.message = "Parking to shutdown pose"
         return response
 
     def start_opensot_callback(self, msg: Bool):
@@ -616,7 +707,7 @@ class G1CollisionAvoidanceNode(Node):
         self._scan_t = 0.0
         self._scan_active = True
         self._set_led(*LED_SCANNING)
-        self._say_async("Entering ... scanning ... mode")
+        # self._say_async("Entering ... scanning ... mode")  # speech moved to tts_node
         self.get_logger().info("[Scan] Entering scanning mode")
 
     def _set_led(self, r, g, b):
@@ -627,32 +718,33 @@ class G1CollisionAvoidanceNode(Node):
         except Exception as e:
             self.get_logger().error(f"[Led] failed: {e}")
 
-    def _say_async(self, text):
-        """Speak text on the G1 speaker without blocking the control loop."""
-        if self.audio_client is None:
-            return
-        if self._say_thread is not None and self._say_thread.is_alive():
-            return
-        self._say_thread = threading.Thread(target=self._say_blocking, args=(text,), daemon=True)
-        self._say_thread.start()
-
-    def _say_blocking(self, text):
-        try:
-            pcm = synthesize_pcm(text)
-            if not pcm:
-                return
-            stream_id = str(int(time.time() * 1000))
-            start = time.monotonic()
-            for offset in range(0, len(pcm), CHUNK_SIZE):
-                play_stream(self.audio_client, stream_id, pcm[offset:offset + CHUNK_SIZE])
-                time.sleep(1)
-            audio_seconds = len(pcm) / 32000.0
-            remaining = audio_seconds + 0.5 - (time.monotonic() - start)
-            if remaining > 0:
-                time.sleep(remaining)
-            play_stop(self.audio_client, stream_id)
-        except Exception as e:
-            self.get_logger().error(f"[Say] failed: {e}")
+    # Speech moved to the dedicated g1pilot tts_node (publish to /g1pilot/say).
+    # def _say_async(self, text):
+    #     """Speak text on the G1 speaker without blocking the control loop."""
+    #     if self.audio_client is None:
+    #         return
+    #     if self._say_thread is not None and self._say_thread.is_alive():
+    #         return
+    #     self._say_thread = threading.Thread(target=self._say_blocking, args=(text,), daemon=True)
+    #     self._say_thread.start()
+    #
+    # def _say_blocking(self, text):
+    #     try:
+    #         pcm = synthesize_pcm(text)
+    #         if not pcm:
+    #             return
+    #         stream_id = str(int(time.time() * 1000))
+    #         start = time.monotonic()
+    #         for offset in range(0, len(pcm), CHUNK_SIZE):
+    #             play_stream(self.audio_client, stream_id, pcm[offset:offset + CHUNK_SIZE])
+    #             time.sleep(1)
+    #         audio_seconds = len(pcm) / 32000.0
+    #         remaining = audio_seconds + 0.5 - (time.monotonic() - start)
+    #         if remaining > 0:
+    #             time.sleep(remaining)
+    #         play_stop(self.audio_client, stream_id)
+    #     except Exception as e:
+    #         self.get_logger().error(f"[Say] failed: {e}")
 
     def _exit_scanning(self):
         self._scan_active = False
@@ -661,7 +753,7 @@ class G1CollisionAvoidanceNode(Node):
         self._do_full_reset()
         self._activate_stack(self._teleop_stack)
         self._set_led(*LED_OPERATING)
-        self._say_async("Exiting ... scanning ... mode, ... Returning ... to ... operation ... mode")
+        # self._say_async("Exiting ... scanning ... mode, ... Returning ... to ... operation ... mode")  # speech moved to tts_node
         self.get_logger().info("[Scan] Exiting scanning mode")
 
     def box_pose_callback(self, msg: Marker):
@@ -1167,21 +1259,26 @@ class G1CollisionAvoidanceNode(Node):
         # directly to OpenSoT's converged pose — not via q_init, which would
         # otherwise cause a visible lean once OpenSoT engages and pulls the
         # CoM target.
-        if self.use_whole_body and self.start_opensot and not self._wb_init_done:
-            if not self._wb_init_active:
-                if self._opensot_ever_started:
-                    # Re-start (e.g. after a reset): blend from the last
-                    # published command, which the robot is already tracking
-                    # because it was held in place during the reset.
-                    self._wb_q_start = self.get_last_cmd_q()
-                else:
-                    # Very first start: no command has been published yet, so
-                    # blend from the real measured robot state (real TF).
-                    self._wb_q_start = self.get_current_motor_q()
-                    self._opensot_ever_started = True
-                self._wb_init_start_time = time.time()
-                self._wb_init_active = True
-                self.get_logger().info("[WB] start_opensot received: gradual init via OpenSoT")
+        if self.use_whole_body and self.start_opensot and self._ramp_t0 is None:
+            if not self._opensot_ever_started:
+                # Very first start: legs ramp over 15 s; the torso hangs limp for
+                # 10 s then ramps over 5 s; the arms hang limp for 15 s then ramp
+                # over 5 s. Blend from measured TF.
+                self._leg_ramp = {"delay": 0.0, "duration": 15.0, "q_start": None}
+                self._waist_ramp = {"delay": 10.0, "duration": 5.0, "q_start": None}
+                self._arm_ramp = {"delay": 15.0, "duration": 5.0, "q_start": None}
+                self._ramp_capture = self.get_current_motor_q
+                self.get_logger().info("[WB] start_opensot: first bring-up (legs 15s, torso limp 10s+5s, arms 15s+5s)")
+            else:
+                # Reset-restart: legs+waist+arms ramp together over 3 s with full
+                # PD, no limp. Blend from the last command (robot held there).
+                self._leg_ramp = {"delay": 0.0, "duration": 3.0, "q_start": None}
+                self._waist_ramp = {"delay": 0.0, "duration": 3.0, "q_start": None}
+                self._arm_ramp = {"delay": 0.0, "duration": 3.0, "q_start": None}
+                self._ramp_capture = self.get_last_cmd_q
+                self.get_logger().info("[WB] start_opensot: reset restart (legs+waist+arms 3s together)")
+            self._ramp_t0 = time.time()
+            self._opensot_ever_started = True
 
         if self.start_opensot and not self.emergency_stop:
             self.model.setJointPosition(self.q)
@@ -1292,21 +1389,34 @@ class G1CollisionAvoidanceNode(Node):
                     self.lowcmd_publisher.Write(self.msg)
                 return
 
-            q_cmd = self.q[7:]
-            if self.use_whole_body and self._wb_init_active and not self._wb_init_done:
-                alpha = min(
-                    (time.time() - self._wb_init_start_time) / self._wb_init_duration,
-                    1.0,
-                )
-                s = alpha * alpha * (3.0 - 2.0 * alpha)
-                q_cmd = (1.0 - s) * self._wb_q_start + s * q_cmd
-                if alpha >= 1.0:
-                    self._wb_init_active = False
-                    self._wb_init_done = True
-                    self.get_logger().info("[WB] Gradual init complete. OpenSoT taking over directly.")
-            self._apply_upper_body_cmds(q_cmd)
-            if self.use_whole_body:
-                self._apply_leg_cmds(q_cmd)
+            now = time.time()
+            q_target = self.q[7:]
+
+            if self._park_active:
+                # Shutdown ramp: arms limp, legs ease to the park pose, then the
+                # waist follows after its delay (OpenSoT output ignored).
+                self._apply_arm_cmds(q_target, limp=True)
+                # Legs: ramp immediately.
+                _, leg_cmd = self._ramp_cmd(self._leg_ramp, now, PARK_POSE)
+                self._apply_leg_cmds(leg_cmd)
+                # Waist: hold at the last command until its delay elapses
+                # (skip applying = full-PD hold), then ramp.
+                waist_state, waist_cmd = self._ramp_cmd(self._waist_ramp, now, PARK_POSE)
+                if waist_state != "limp":
+                    self._apply_waist_cmds(waist_cmd)
+            else:
+                # Arms: limp until their ramp begins, then blend, then track.
+                arm_state, arm_cmd = self._ramp_cmd(self._arm_ramp, now, q_target)
+                self._apply_arm_cmds(arm_cmd, limp=(arm_state == "limp"))
+
+                if self.use_whole_body:
+                    # Legs ramp from t0 (never limp).
+                    _, leg_cmd = self._ramp_cmd(self._leg_ramp, now, q_target)
+                    self._apply_leg_cmds(leg_cmd)
+                    # Torso: limp until its ramp begins (first bring-up only;
+                    # delay 0 on reset means it never goes limp), then blend.
+                    waist_state, waist_cmd = self._ramp_cmd(self._waist_ramp, now, q_target)
+                    self._apply_waist_cmds(waist_cmd, limp=(waist_state == "limp"))
             self._publish_lowcmd()
 
             # publish self-collision debugging

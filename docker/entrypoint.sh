@@ -6,11 +6,8 @@ if [ -z "$G1_INTERFACE" ]; then
     exit 1
 fi
 
-# Speech synthesis dependencies for g1pilot.state.say (espeak-ng + ffmpeg).
-if ! command -v espeak-ng >/dev/null 2>&1 || ! command -v ffmpeg >/dev/null 2>&1; then
-    DEBIAN_FRONTEND=noninteractive apt-get update \
-        && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends espeak-ng ffmpeg
-fi
+# Speech synthesis deps (Piper + espeak-ng + ffmpeg) are baked into the image
+# (see docker/piper.Dockerfile, :2026.06+). No runtime install needed.
 
 if [ "${SIMULATION,,}" = "true" ] || [ "$SIMULATION" = "1" ]; then
     # .bashrc (baked into the image) re-binds CYCLONEDDS_URI to G1_INTERFACE on every

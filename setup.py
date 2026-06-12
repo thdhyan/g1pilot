@@ -61,6 +61,7 @@ setup(
         'console_scripts': [
             # States Nodes
             'robot_state = g1pilot.state.robot_state:main',
+            'tts_node = g1pilot.state.tts_node:main',
 
             # Manipulation Nodes
             'interactive_marker = g1pilot.manipulation.interactive_marker:main',
